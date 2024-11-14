@@ -178,25 +178,12 @@ bool has_tearing_support(ComPtr<IDXGIFactory4> dxgi_factory4);
     // ------------
     // Create RTVs
     // -------
+    if (!update_render_target_views())
     {
-        m_rtv_descriptor_size =
-            m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(
-            m_rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
-        );
-
-        for (int i = 0; i < NUM_FRAMES; ++i)
-        {
-            DXERR(
-                m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_backbuffers[i])),
-                "App::init: failed to get swapchain buffer"
-            );
-            m_device->CreateRenderTargetView(m_backbuffers[i].Get(), nullptr, rtv_handle);
-            rtv_handle.Offset(m_rtv_descriptor_size);
-        }
-        spdlog::trace("App::init: created rtvs");
+        spdlog::error("App::init: failed to create rtvs");
+        return false;
     }
+    spdlog::trace("App::init: created rtvs");
 
     // ------------
     // Create command allocators
@@ -257,6 +244,14 @@ void App::run()
             if (event.type == SDL_EVENT_QUIT)
             {
                 break;
+            }
+            else if (event.type == SDL_EVENT_WINDOW_RESIZED)
+            {
+                if (!handle_resize())
+                {
+                    spdlog::error("App::run: resize was requested but failed");
+                    break;
+                };
             }
         }
 
@@ -338,6 +333,49 @@ bool App::render_frame()
     return true;
 }
 
+bool App::handle_resize()
+{
+    int width, height;
+    assert(SDL_GetWindowSize(m_window, &width, &height));
+
+    if (!flush())
+    {
+        spdlog::error("App::handle_resize: failed to flush");
+        return false;
+    }
+
+    for (int i = 0; i < NUM_FRAMES; ++i)
+    {
+        m_backbuffers[i].Reset();
+        m_frame_fence_values[i] = m_frame_fence_values[m_current_backbuffer_index];
+    }
+
+    DXGI_SWAP_CHAIN_DESC swap_chain_desc{};
+    DXERR(
+        m_swapchain->GetDesc(&swap_chain_desc),
+        "App::handle_resize: failed to get previous swapchain description"
+    );
+    DXERR(
+        m_swapchain->ResizeBuffers(
+            NUM_FRAMES,
+            width,
+            height,
+            swap_chain_desc.BufferDesc.Format,
+            swap_chain_desc.Flags
+        ),
+        "App::handle_resize: failed to resize buffers"
+    );
+    m_current_backbuffer_index = m_swapchain->GetCurrentBackBufferIndex();
+
+    if (!update_render_target_views())
+    {
+        spdlog::error("App::handle_resize: failed to update rtvs");
+        return false;
+    }
+
+    return true;
+}
+
 bool App::create_descriptor_heap(
     D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors, ComPtr<ID3D12DescriptorHeap> &out_heap
 )
@@ -349,6 +387,28 @@ bool App::create_descriptor_heap(
         m_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&out_heap)),
         "App::create_descriptor_heap: failed to create descriptor heap"
     );
+
+    return true;
+}
+
+bool App::update_render_target_views()
+{
+    m_rtv_descriptor_size =
+        m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(
+        m_rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+    );
+
+    for (int i = 0; i < NUM_FRAMES; ++i)
+    {
+        DXERR(
+            m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_backbuffers[i])),
+            "App::update_render_target_views: failed to get swapchain buffer"
+        );
+        m_device->CreateRenderTargetView(m_backbuffers[i].Get(), nullptr, rtv_handle);
+        rtv_handle.Offset(m_rtv_descriptor_size);
+    }
 
     return true;
 }

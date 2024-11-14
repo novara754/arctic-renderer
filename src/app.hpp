@@ -71,10 +71,14 @@ class App
   private:
     [[nodiscard]] bool render_frame();
 
+    [[nodiscard]] bool handle_resize();
+
     [[nodiscard]] bool create_descriptor_heap(
         D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors,
         ComPtr<ID3D12DescriptorHeap> &out_heap
     );
+
+    [[nodiscard]] bool update_render_target_views();
 
     [[nodiscard]] bool signal_fence(uint64_t &out_value);
     [[nodiscard]] bool wait_for_fence_value(uint64_t value);
