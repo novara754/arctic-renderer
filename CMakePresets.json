@@ -1,0 +1,26 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "MSVC",
+      "displayName": "MSVC",
+      "description": "Configure and generate MSVC project files for all configurations",
+      "binaryDir": "${sourceDir}/build/",
+      "generator": "Visual Studio 17 2022"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "Debug",
+      "configurePreset": "MSVC",
+      "displayName": "Build (Debug)",
+      "description": "Build with MSVC (Debug)",
+      "configuration": "Debug"
+    }
+  ]
+}
