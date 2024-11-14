@@ -14,6 +14,7 @@ FetchContent_Declare(
         SYSTEM
         GIT_REPOSITORY "https://github.com/gabime/spdlog"
         GIT_TAG "b6da59447f165ad70a4e3ca1c575b14ea66d92c9"
+        EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(spdlog)
 
@@ -22,6 +23,7 @@ FetchContent_Declare(
         SYSTEM
         GIT_REPOSITORY "https://github.com/libsdl-org/SDL"
         GIT_TAG "68cc173d9293e890ba93feaed1d3dc17742aa9b3"
+        EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(SDL3)
 
@@ -30,22 +32,16 @@ FetchContent_Declare(
         SYSTEM
         GIT_REPOSITORY "https://github.com/ocornut/imgui.git"
         GIT_TAG "71c77c081ac36841e682498229088e7678207112"
+        EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(imgui)
-
-FetchContent_Declare(
-        glm
-        SYSTEM
-        GIT_REPOSITORY "https://github.com/g-truc/glm"
-        GIT_TAG "1.0.1"
-)
-FetchContent_MakeAvailable(glm)
 
 FetchContent_Declare(
         DirectX-Headers
         SYSTEM
         GIT_REPOSITORY "https://github.com/microsoft/DirectX-Headers"
         GIT_TAG "v1.0"
+        EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(DirectX-Headers)
 
@@ -65,17 +61,14 @@ add_executable(arctic
 
 target_compile_options(arctic PRIVATE /W4 /WX)
 
-target_compile_definitions(arctic PRIVATE
-        _CRT_SECURE_NO_WARNINGS
-        GLM_FORCE_EXPLICIT_CTOR
-)
+target_compile_definitions(arctic PRIVATE _CRT_SECURE_NO_WARNINGS)
+
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR}/backends)
 target_include_directories(arctic PRIVATE ${stb_SOURCE_DIR})
 target_link_libraries(arctic PRIVATE DirectX-Headers)
 target_link_libraries(arctic PRIVATE spdlog::spdlog)
 target_link_libraries(arctic PRIVATE SDL3::SDL3-static)
-target_link_libraries(arctic PRIVATE glm::glm)
 target_link_libraries(arctic PRIVATE d3d12.lib dxgi.lib dxguid.lib d3dcompiler.lib)
 
 add_custom_command(
