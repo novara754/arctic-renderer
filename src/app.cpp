@@ -7,7 +7,10 @@
 bool get_best_adapter(
     ComPtr<IDXGIFactory4> dxgi_factory4, ComPtr<IDXGIAdapter4> &out_dxgi_adapter4
 );
+
 bool has_tearing_support(ComPtr<IDXGIFactory4> dxgi_factory4);
+
+bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **code);
 
 [[nodiscard]] bool App::init()
 {
@@ -57,7 +60,7 @@ bool has_tearing_support(ComPtr<IDXGIFactory4> dxgi_factory4);
     // Create device
     // -------
     DXERR(
-        D3D12CreateDevice(dxgi_adapter4.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device)),
+        D3D12CreateDevice(dxgi_adapter4.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)),
         "App::init: failed to create device"
     );
     spdlog::trace("App::init: created device");
@@ -230,6 +233,95 @@ bool has_tearing_support(ComPtr<IDXGIFactory4> dxgi_factory4);
     }
     spdlog::trace("App::init: created fence and fence event");
 
+    // ------------
+    // Create triange pipeline state
+    // -------
+    {
+        ComPtr<ID3DBlob> vs_code, ps_code;
+        if (!compile_shader(L"../shaders/triangle.hlsl", "vs_main", "vs_5_0", &vs_code))
+        {
+            spdlog::error("App::init: failed to compile vertex shader");
+            return false;
+        }
+        if (!compile_shader(L"../shaders/triangle.hlsl", "ps_main", "ps_5_0", &ps_code))
+        {
+            spdlog::error("App::init: failed to compile pixel shader");
+            return false;
+        }
+        spdlog::trace("App::init: compiled triangle shaders");
+
+        ComPtr<ID3DBlob> root_signature;
+        ComPtr<ID3DBlob> error;
+        CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc;
+        root_signature_desc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+        DXERR(
+            D3D12SerializeRootSignature(
+                &root_signature_desc,
+                D3D_ROOT_SIGNATURE_VERSION_1,
+                &root_signature,
+                &error
+            ),
+            "App::init: failed to serialize triangle root signature"
+        );
+        DXERR(
+            m_device->CreateRootSignature(
+                0,
+                root_signature->GetBufferPointer(),
+                root_signature->GetBufferSize(),
+                IID_PPV_ARGS(&m_triangle_root_signature)
+            ),
+            "App::init: failed to create triangle root signature"
+        );
+        spdlog::trace("App::init: created triangle root signature");
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
+        pipeline_desc.pRootSignature = m_triangle_root_signature.Get();
+        pipeline_desc.VS = {
+            .pShaderBytecode = vs_code->GetBufferPointer(),
+            .BytecodeLength = vs_code->GetBufferSize(),
+        };
+        pipeline_desc.PS = {
+            .pShaderBytecode = ps_code->GetBufferPointer(),
+            .BytecodeLength = ps_code->GetBufferSize(),
+        };
+        pipeline_desc.BlendState.RenderTarget[0] = {
+            .BlendEnable = FALSE,
+            .LogicOpEnable = FALSE,
+            .SrcBlend = D3D12_BLEND_ONE,
+            .DestBlend = D3D12_BLEND_ZERO,
+            .BlendOp = D3D12_BLEND_OP_ADD,
+            .SrcBlendAlpha = D3D12_BLEND_ONE,
+            .DestBlendAlpha = D3D12_BLEND_ZERO,
+            .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+            .LogicOp = D3D12_LOGIC_OP_NOOP,
+            .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
+        };
+        pipeline_desc.SampleMask = ~0u;
+        pipeline_desc.RasterizerState = {
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_NONE,
+            .FrontCounterClockwise = TRUE,
+            .DepthBias = 0,
+            .DepthBiasClamp = 0.0f,
+            .SlopeScaledDepthBias = 0.0f,
+            .DepthClipEnable = TRUE,
+            .MultisampleEnable = FALSE,
+            .AntialiasedLineEnable = FALSE,
+            .ForcedSampleCount = 0,
+            .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+        };
+        pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        pipeline_desc.NumRenderTargets = 1;
+        pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        pipeline_desc.SampleDesc = {1, 0};
+        DXERR(
+            m_device
+                ->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&m_triangle_pipeline)),
+            "App::init: failed to create triangle pipeline state"
+        );
+        spdlog::trace("App::init: created triangle pipeline state");
+    }
+
     return true;
 }
 
@@ -302,20 +394,40 @@ bool App::render_frame()
             m_current_backbuffer_index,
             m_rtv_descriptor_size
         );
-        std::array clear_color{1.0f, 0.5f, 0.1f};
+        std::array<float, 4> clear_color{1.0f, 0.5f, 0.1f, 1.0};
         m_command_list->ClearRenderTargetView(rtv_handle, clear_color.data(), 0, nullptr);
+        m_command_list->SetGraphicsRootSignature(m_triangle_root_signature.Get());
+        m_command_list->SetPipelineState(m_triangle_pipeline.Get());
+        m_command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+        D3D12_VIEWPORT viewport{
+            .TopLeftX = 0.0f,
+            .TopLeftY = 0.0f,
+            .Width = static_cast<float>(m_window_size.width),
+            .Height = static_cast<float>(m_window_size.height),
+            .MinDepth = 0.0f,
+            .MaxDepth = 1.0f,
+        };
+        m_command_list->RSSetViewports(1, &viewport);
+        D3D12_RECT scissor{
+            .left = 0,
+            .top = 0,
+            .right = m_window_size.width,
+            .bottom = m_window_size.height,
+        };
+        m_command_list->RSSetScissorRects(1, &scissor);
+        m_command_list->DrawInstanced(3, 1, 0, 0);
     }
 
     {
+
         CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             backbuffer.Get(),
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT
         );
         m_command_list->ResourceBarrier(1, &barrier);
-    }
 
-    {
         DXERR(m_command_list->Close(), "App::render_frame: failed to close command list");
         std::array<ID3D12CommandList *const, 1> lists{m_command_list.Get()};
         m_command_queue->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
@@ -338,6 +450,14 @@ bool App::handle_resize()
     int width, height;
     assert(SDL_GetWindowSize(m_window, &width, &height));
 
+    if (width == m_window_size.width && height == m_window_size.height)
+    {
+        return true;
+    }
+
+    m_window_size.width = std::min(1, width);
+    m_window_size.height = std::min(1, height);
+
     if (!flush())
     {
         spdlog::error("App::handle_resize: failed to flush");
@@ -358,8 +478,8 @@ bool App::handle_resize()
     DXERR(
         m_swapchain->ResizeBuffers(
             NUM_FRAMES,
-            width,
-            height,
+            m_window_size.width,
+            m_window_size.height,
             swap_chain_desc.BufferDesc.Format,
             swap_chain_desc.Flags
         ),
@@ -494,4 +614,45 @@ bool has_tearing_support(ComPtr<IDXGIFactory4> dxgi_factory4)
     }
 
     return false;
+}
+
+bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **code)
+{
+    UINT compile_flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_WARNINGS_ARE_ERRORS;
+#if defined(_DEBUG)
+    compile_flags |= D3DCOMPILE_DEBUG;
+#endif
+
+    ComPtr<ID3DBlob> errors;
+    if (HRESULT res = D3DCompileFromFile(
+            path,
+            nullptr,
+            nullptr,
+            entry_point,
+            target,
+            compile_flags,
+            0,
+            code,
+            &errors
+        );
+        FAILED(res))
+    {
+        if (errors)
+        {
+            spdlog::error(
+                "compile_shader: failed to compile shader:\n{}",
+                static_cast<const char *>(errors->GetBufferPointer())
+            );
+        }
+        else
+        {
+            spdlog::error(
+                "compile_shader: failed to compile shader: 0x{:x}",
+                static_cast<unsigned long>(res)
+            );
+        }
+        return false;
+    }
+
+    return true;
 }

@@ -24,7 +24,7 @@
 #define DXERR(x, msg)                                                                              \
     if (FAILED(x))                                                                                 \
     {                                                                                              \
-        spdlog::error("{}: {}", msg, x);                                                           \
+        spdlog::error("{}: 0x{:x}", msg, x);                                                       \
         return false;                                                                              \
     }
 
@@ -42,6 +42,11 @@ class App
   private:
     SDL_Window *m_window;
 
+    struct
+    {
+        int width, height;
+    } m_window_size{WINDOW_WIDTH, WINDOW_HEIGHT};
+
     ComPtr<ID3D12Device2> m_device;
     ComPtr<ID3D12CommandQueue> m_command_queue;
     bool m_allow_tearing;
@@ -58,6 +63,9 @@ class App
     uint64_t m_fence_value{0};
     std::array<uint64_t, NUM_FRAMES> m_frame_fence_values{};
     HANDLE m_fence_event;
+
+    ComPtr<ID3D12RootSignature> m_triangle_root_signature;
+    ComPtr<ID3D12PipelineState> m_triangle_pipeline;
 
   public:
     explicit App(SDL_Window *window) : m_window(window)
