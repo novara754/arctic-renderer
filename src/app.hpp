@@ -70,6 +70,15 @@ class App
     std::array<uint64_t, NUM_FRAMES> m_frame_fence_values{};
     HANDLE m_fence_event;
 
+    struct
+    {
+        ComPtr<ID3D12CommandAllocator> command_allocator;
+        ComPtr<ID3D12GraphicsCommandList> command_list;
+        ComPtr<ID3D12Fence> fence;
+        HANDLE fence_event;
+        uint64_t fence_value{0};
+    } m_immediate_submit;
+
     ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
 
     ComPtr<ID3D12Resource> m_triangle_vertex_buffer;
@@ -103,7 +112,21 @@ class App
 
     [[nodiscard]] bool update_render_target_views();
 
-    [[nodiscard]] bool signal_fence(uint64_t &out_value);
-    [[nodiscard]] bool wait_for_fence_value(uint64_t value);
+    [[nodiscard]] bool immediate_submit(std::function<void(ID3D12GraphicsCommandList *cmd_list)> &&f
+    );
+
+    [[nodiscard]] bool create_buffer(
+        uint64_t size, D3D12_RESOURCE_STATES initial_state, D3D12_HEAP_TYPE heap_type,
+        ComPtr<ID3D12Resource> &out_buffer
+    );
+
+    [[nodiscard]] bool upload_to_resource(
+        ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
+        uint64_t src_data_size
+    );
+
+    [[nodiscard]] bool
+    signal_fence(ID3D12Fence *fence, uint64_t &fence_value, uint64_t &out_wait_value);
+    [[nodiscard]] bool wait_for_fence_value(ID3D12Fence *fence, HANDLE fence_event, uint64_t value);
     [[nodiscard]] bool flush();
 };

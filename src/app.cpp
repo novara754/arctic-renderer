@@ -245,6 +245,51 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     spdlog::trace("App::init: created fence and fence event");
 
     // ------------
+    // Create objects for immediate submit
+    // -------
+    {
+        DXERR(
+            m_device->CreateCommandAllocator(
+                D3D12_COMMAND_LIST_TYPE_DIRECT,
+                IID_PPV_ARGS(&m_immediate_submit.command_allocator)
+            ),
+            "App::init: failed to create command allocator for immediate submit"
+        );
+        m_immediate_submit.command_allocator->SetName(L"immediate submit command allocator");
+
+        DXERR(
+            m_device->CreateCommandList(
+                0,
+                D3D12_COMMAND_LIST_TYPE_DIRECT,
+                m_immediate_submit.command_allocator.Get(),
+                nullptr,
+                IID_PPV_ARGS(&m_immediate_submit.command_list)
+            ),
+            "App::init: failed to create command list for immediate submit"
+        );
+        m_immediate_submit.command_list->SetName(L"immediate submit command list");
+        DXERR(
+            m_immediate_submit.command_list->Close(),
+            "App::init: failed to close command list for immediate submit"
+        );
+
+        DXERR(
+            m_device
+                ->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_immediate_submit.fence)),
+            "App::init: failed to create fence for immediate submit"
+        );
+        m_immediate_submit.fence->SetName(L"immediate submit command fence");
+        m_immediate_submit.fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (!m_immediate_submit.fence_event)
+        {
+            spdlog::error("App::init: failed to create fence event for immediate submit");
+            return false;
+        }
+
+        spdlog::trace("App::init: created immediate submit objects");
+    }
+
+    // ------------
     // Create triangle pipeline state
     // -------
     {
@@ -253,28 +298,28 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
             Vertex{{-0.9f, -0.9f, 0.0f}, {0.0f, 1.0f, 0.0f}},
             Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
         };
-        CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_UPLOAD);
-        CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices));
-        DXERR(
-            m_device->CreateCommittedResource(
-                &heap_props,
-                D3D12_HEAP_FLAG_NONE,
-                &resource_desc,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&m_triangle_vertex_buffer)
-            ),
-            "App::init: failed to create triangle vertex buffer"
-        );
+        if (!create_buffer(
+                sizeof(vertices),
+                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+                D3D12_HEAP_TYPE_DEFAULT,
+                m_triangle_vertex_buffer
+            ))
+        {
+            spdlog::error("App::init: failed to create triangle vertex buffer");
+            return false;
+        }
+        m_triangle_vertex_buffer->SetName(L"triangle vertex buffer");
 
-        void *vertex_buffer_ptr;
-        D3D12_RANGE range{};
-        DXERR(
-            m_triangle_vertex_buffer->Map(0, &range, &vertex_buffer_ptr),
-            "App::init: failed to map triangle vertex buffer"
-        );
-        std::memcpy(vertex_buffer_ptr, vertices.data(), sizeof(vertices));
-        m_triangle_vertex_buffer->Unmap(0, nullptr);
+        if (!upload_to_resource(
+                m_triangle_vertex_buffer.Get(),
+                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+                vertices.data(),
+                sizeof(vertices)
+            ))
+        {
+            spdlog::error("App::init: failed to upload data to triangle vertex buffer");
+            return false;
+        }
 
         m_triangle_vertex_buffer_view.BufferLocation =
             m_triangle_vertex_buffer->GetGPUVirtualAddress();
@@ -494,7 +539,11 @@ bool App::render_frame()
 
     m_current_backbuffer_index = m_swapchain->GetCurrentBackBufferIndex();
     DXERR(
-        wait_for_fence_value(m_frame_fence_values[m_current_backbuffer_index]),
+        wait_for_fence_value(
+            m_fence.Get(),
+            m_fence_event,
+            m_frame_fence_values[m_current_backbuffer_index]
+        ),
         "App::render_frame: failed to wait for fence"
     );
 
@@ -574,7 +623,11 @@ bool App::render_frame()
         UINT flags = m_allow_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
         m_swapchain->Present(0, flags);
         DXERR(
-            signal_fence(m_frame_fence_values[m_current_backbuffer_index]),
+            signal_fence(
+                m_fence.Get(),
+                m_fence_value,
+                m_frame_fence_values[m_current_backbuffer_index]
+            ),
             "App::render_frame: failed to signal fence"
         );
     }
@@ -682,26 +735,147 @@ bool App::update_render_target_views()
     return true;
 }
 
-bool App::signal_fence(uint64_t &out_value)
+bool App::immediate_submit(std::function<void(ID3D12GraphicsCommandList *cmd_list)> &&f)
 {
-    out_value = ++m_fence_value;
     DXERR(
-        m_command_queue->Signal(m_fence.Get(), out_value),
+        m_immediate_submit.command_allocator->Reset(),
+        "App::immediate_submit: failed to reset command allocator"
+    );
+    DXERR(
+        m_immediate_submit.command_list->Reset(m_immediate_submit.command_allocator.Get(), nullptr),
+        "App::immediate_submit: failed to reset command list"
+    );
+
+    f(m_immediate_submit.command_list.Get());
+
+    DXERR(
+        m_immediate_submit.command_list->Close(),
+        "App::immediate_submit: failed to close command list"
+    );
+
+    std::array<ID3D12CommandList *const, 1> lists{m_immediate_submit.command_list.Get()};
+    m_command_queue->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
+
+    uint64_t wait_value;
+    if (!signal_fence(m_immediate_submit.fence.Get(), m_immediate_submit.fence_value, wait_value))
+    {
+        spdlog::error("App::immediate_submit: failed to signal fence");
+        return false;
+    }
+
+    if (!wait_for_fence_value(
+            m_immediate_submit.fence.Get(),
+            m_immediate_submit.fence_event,
+            wait_value
+        ))
+    {
+        spdlog::error("App::immediate_submit: failed to wait for fence");
+        return false;
+    }
+
+    return true;
+}
+
+bool App::create_buffer(
+    uint64_t size, D3D12_RESOURCE_STATES initial_state, D3D12_HEAP_TYPE heap_type,
+    ComPtr<ID3D12Resource> &out_buffer
+)
+{
+    CD3DX12_HEAP_PROPERTIES heap_props(heap_type);
+    CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+    DXERR(
+        m_device->CreateCommittedResource(
+            &heap_props,
+            D3D12_HEAP_FLAG_NONE,
+            &resource_desc,
+            initial_state,
+            nullptr,
+            IID_PPV_ARGS(&out_buffer)
+        ),
+        "App::create_buffer: failed to create buffer"
+    );
+    return true;
+}
+
+bool App::upload_to_resource(
+    ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
+    uint64_t src_data_size
+)
+{
+    ComPtr<ID3D12Resource> staging_buffer;
+    if (!create_buffer(
+            src_data_size,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            D3D12_HEAP_TYPE_UPLOAD,
+            staging_buffer
+        ))
+    {
+        spdlog::error("App::upload_to_resource: failed to create staging buffer");
+        return false;
+    }
+
+    void *staging_buffer_ptr;
+    DXERR(
+        staging_buffer->Map(0, nullptr, &staging_buffer_ptr),
+        "App::upload_to_resource: failed to map staging buffer"
+    );
+    spdlog::debug(
+        "src_data = {}, src_data_size = {}",
+        spdlog::fmt_lib::ptr(src_data),
+        src_data_size
+    );
+    std::memcpy(staging_buffer_ptr, src_data, src_data_size);
+    staging_buffer->Unmap(0, nullptr);
+
+    bool res = immediate_submit(
+        [dst_buffer, staging_buffer, dst_buffer_state](ID3D12GraphicsCommandList *cmd_list) {
+            CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                dst_buffer,
+                dst_buffer_state,
+                D3D12_RESOURCE_STATE_COPY_DEST
+            );
+            cmd_list->ResourceBarrier(1, &barrier);
+
+            cmd_list->CopyResource(dst_buffer, staging_buffer.Get());
+
+            barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                dst_buffer,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                dst_buffer_state
+            );
+            cmd_list->ResourceBarrier(1, &barrier);
+        }
+    );
+
+    if (!res)
+    {
+        spdlog::error("App::upload_to_resource: immediate submit failed");
+        return false;
+    }
+
+    return true;
+}
+
+bool App::signal_fence(ID3D12Fence *fence, uint64_t &fence_value, uint64_t &out_wait_value)
+{
+    out_wait_value = ++fence_value;
+    DXERR(
+        m_command_queue->Signal(fence, out_wait_value),
         "App::signal_fence: failed to signal fence"
     );
     return true;
 }
 
-bool App::wait_for_fence_value(uint64_t value)
+bool App::wait_for_fence_value(ID3D12Fence *fence, HANDLE fence_event, uint64_t value)
 {
-    if (m_fence->GetCompletedValue() < value)
+    if (fence->GetCompletedValue() < value)
     {
         DXERR(
-            m_fence->SetEventOnCompletion(value, m_fence_event),
+            fence->SetEventOnCompletion(value, fence_event),
             "App::wait_for_fence_value: failed to set event"
         );
         std::chrono::milliseconds duration = std::chrono::milliseconds::max();
-        WaitForSingleObject(m_fence_event, static_cast<DWORD>(duration.count()));
+        WaitForSingleObject(fence_event, static_cast<DWORD>(duration.count()));
     }
     return true;
 }
@@ -709,8 +883,14 @@ bool App::wait_for_fence_value(uint64_t value)
 bool App::flush()
 {
     uint64_t wait_value;
-    DXERR(signal_fence(wait_value), "App::flush: failed to signal fence");
-    DXERR(wait_for_fence_value(wait_value), "App::flush: failed to wait for fence");
+    DXERR(
+        signal_fence(m_fence.Get(), m_fence_value, wait_value),
+        "App::flush: failed to signal fence"
+    );
+    DXERR(
+        wait_for_fence_value(m_fence.Get(), m_fence_event, wait_value),
+        "App::flush: failed to wait for fence"
+    );
     return true;
 }
 
