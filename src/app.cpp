@@ -4,6 +4,10 @@
 
 #include <SDL3/SDL_events.h>
 
+#include "imgui.h"
+#include "imgui_impl_dx12.h"
+#include "imgui_impl_sdl3.h"
+
 bool get_best_adapter(
     ComPtr<IDXGIFactory4> dxgi_factory4, ComPtr<IDXGIAdapter4> &out_dxgi_adapter4
 );
@@ -126,26 +130,27 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     // ------------
     // Create swapchain
     // -------
+    DXGI_SWAP_CHAIN_DESC1 swapchain_desc{
+        .Width = WINDOW_WIDTH,
+        .Height = WINDOW_HEIGHT,
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .Stereo = FALSE,
+        // must be {1, 0} for flip model
+        .SampleDesc = {1, 0},
+        .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        .BufferCount = NUM_FRAMES,
+        .Scaling = DXGI_SCALING_STRETCH,
+        .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
+        .Flags = m_allow_tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u,
+    };
     {
         HWND hwnd = static_cast<HWND>(SDL_GetPointerProperty(
             SDL_GetWindowProperties(m_window),
             SDL_PROP_WINDOW_WIN32_HWND_POINTER,
             nullptr
         ));
-        DXGI_SWAP_CHAIN_DESC1 swapchain_desc{
-            .Width = WINDOW_WIDTH,
-            .Height = WINDOW_HEIGHT,
-            .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-            .Stereo = FALSE,
-            // must be {1, 0} for flip model
-            .SampleDesc = {1, 0},
-            .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            .BufferCount = NUM_FRAMES,
-            .Scaling = DXGI_SCALING_STRETCH,
-            .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
-            .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
-            .Flags = m_allow_tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u,
-        };
+
         ComPtr<IDXGISwapChain1> swapchain1;
         DXERR(
             dxgi_factory4->CreateSwapChainForHwnd(
@@ -171,7 +176,12 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     // ------------
     // Create RTV descriptor heap
     // -------
-    if (!create_descriptor_heap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NUM_FRAMES, m_rtv_descriptor_heap))
+    if (!create_descriptor_heap(
+            D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            NUM_FRAMES,
+            D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            m_rtv_descriptor_heap
+        ))
     {
         spdlog::error("App::init: failed to create rtv descriptor heap");
         return false;
@@ -322,6 +332,37 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         spdlog::trace("App::init: created triangle pipeline state");
     }
 
+    // ------------
+    // Initialize ImGui
+    // -------
+    {
+        if (!create_descriptor_heap(
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                1,
+                D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                m_imgui_cbv_srv_heap
+            ))
+        {
+            spdlog::error("App::init: failed to create cbv srv heap for imgui");
+            return false;
+        }
+
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+
+        ImGui_ImplSDL3_InitForOther(m_window);
+        ImGui_ImplDX12_Init(
+            m_device.Get(),
+            NUM_FRAMES,
+            swapchain_desc.Format,
+            m_imgui_cbv_srv_heap.Get(),
+            m_imgui_cbv_srv_heap->GetCPUDescriptorHandleForHeapStart(),
+            m_imgui_cbv_srv_heap->GetGPUDescriptorHandleForHeapStart()
+        );
+        spdlog::trace("App::init: initialized imgui");
+    }
+
     return true;
 }
 
@@ -345,6 +386,8 @@ void App::run()
                     break;
                 };
             }
+
+            ImGui_ImplSDL3_ProcessEvent(&event);
         }
 
         if (!render_frame())
@@ -360,10 +403,19 @@ void App::run()
     {
         spdlog::error("App::run: flush failed");
     }
+
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
 }
 
 bool App::render_frame()
 {
+    ImGui_ImplSDL3_NewFrame();
+    ImGui_ImplDX12_NewFrame();
+    ImGui::NewFrame();
+    build_ui();
+
     m_current_backbuffer_index = m_swapchain->GetCurrentBackBufferIndex();
     DXERR(
         wait_for_fence_value(m_frame_fence_values[m_current_backbuffer_index]),
@@ -394,7 +446,8 @@ bool App::render_frame()
             m_current_backbuffer_index,
             m_rtv_descriptor_size
         );
-        std::array<float, 4> clear_color{1.0f, 0.5f, 0.1f, 1.0};
+        std::array<float, 4>
+            clear_color{m_background_color[0], m_background_color[1], m_background_color[2], 1.0};
         m_command_list->ClearRenderTargetView(rtv_handle, clear_color.data(), 0, nullptr);
         m_command_list->SetGraphicsRootSignature(m_triangle_root_signature.Get());
         m_command_list->SetPipelineState(m_triangle_pipeline.Get());
@@ -417,6 +470,11 @@ bool App::render_frame()
         };
         m_command_list->RSSetScissorRects(1, &scissor);
         m_command_list->DrawInstanced(3, 1, 0, 0);
+
+        ImGui::Render();
+        std::array descriptor_heaps{m_imgui_cbv_srv_heap.Get()};
+        m_command_list->SetDescriptorHeaps(1, descriptor_heaps.data());
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_command_list.Get());
     }
 
     {
@@ -443,6 +501,15 @@ bool App::render_frame()
     }
 
     return true;
+}
+
+void App::build_ui()
+{
+    ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    {
+        ImGui::ColorEdit3("Background Color", m_background_color.data());
+    }
+    ImGui::End();
 }
 
 bool App::handle_resize()
@@ -497,12 +564,14 @@ bool App::handle_resize()
 }
 
 bool App::create_descriptor_heap(
-    D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors, ComPtr<ID3D12DescriptorHeap> &out_heap
+    D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors, D3D12_DESCRIPTOR_HEAP_FLAGS flags,
+    ComPtr<ID3D12DescriptorHeap> &out_heap
 )
 {
     D3D12_DESCRIPTOR_HEAP_DESC heap_desc{};
     heap_desc.NumDescriptors = num_descriptors;
     heap_desc.Type = type;
+    heap_desc.Flags = flags;
     DXERR(
         m_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&out_heap)),
         "App::create_descriptor_heap: failed to create descriptor heap"

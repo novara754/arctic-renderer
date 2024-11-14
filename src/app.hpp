@@ -64,8 +64,12 @@ class App
     std::array<uint64_t, NUM_FRAMES> m_frame_fence_values{};
     HANDLE m_fence_event;
 
+    ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
+
     ComPtr<ID3D12RootSignature> m_triangle_root_signature;
     ComPtr<ID3D12PipelineState> m_triangle_pipeline;
+
+    std::array<float, 3> m_background_color{1.0f, 0.5f, 0.1f};
 
   public:
     explicit App(SDL_Window *window) : m_window(window)
@@ -79,10 +83,12 @@ class App
   private:
     [[nodiscard]] bool render_frame();
 
+    void build_ui();
+
     [[nodiscard]] bool handle_resize();
 
     [[nodiscard]] bool create_descriptor_heap(
-        D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors,
+        D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors, D3D12_DESCRIPTOR_HEAP_FLAGS flags,
         ComPtr<ID3D12DescriptorHeap> &out_heap
     );
 
