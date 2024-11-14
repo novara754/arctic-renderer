@@ -263,7 +263,24 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         ComPtr<ID3DBlob> root_signature;
         ComPtr<ID3DBlob> error;
         CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc;
-        root_signature_desc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+        std::array root_parameters{
+            D3D12_ROOT_PARAMETER{
+                .ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+                .Constants =
+                    {
+                        .ShaderRegister = 0,
+                        .RegisterSpace = 0,
+                        .Num32BitValues = 3,
+                    }
+            },
+        };
+        root_signature_desc.Init(
+            static_cast<UINT>(root_parameters.size()),
+            root_parameters.data(),
+            0,
+            nullptr,
+            D3D12_ROOT_SIGNATURE_FLAG_NONE
+        );
         DXERR(
             D3D12SerializeRootSignature(
                 &root_signature_desc,
@@ -449,7 +466,9 @@ bool App::render_frame()
         std::array<float, 4>
             clear_color{m_background_color[0], m_background_color[1], m_background_color[2], 1.0};
         m_command_list->ClearRenderTargetView(rtv_handle, clear_color.data(), 0, nullptr);
+
         m_command_list->SetGraphicsRootSignature(m_triangle_root_signature.Get());
+        m_command_list->SetGraphicsRoot32BitConstants(0, 3, m_top_vertex_color.data(), 0);
         m_command_list->SetPipelineState(m_triangle_pipeline.Get());
         m_command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
@@ -508,6 +527,7 @@ void App::build_ui()
     ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
         ImGui::ColorEdit3("Background Color", m_background_color.data());
+        ImGui::ColorEdit3("Top Vertex Color", m_top_vertex_color.data());
     }
     ImGui::End();
 }

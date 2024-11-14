@@ -70,6 +70,7 @@ class App
     ComPtr<ID3D12PipelineState> m_triangle_pipeline;
 
     std::array<float, 3> m_background_color{1.0f, 0.5f, 0.1f};
+    std::array<float, 3> m_top_vertex_color{1.0f, 0.0f, 0.0f};
 
   public:
     explicit App(SDL_Window *window) : m_window(window)
