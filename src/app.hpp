@@ -31,6 +31,12 @@
 template<typename T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
 
+struct Vertex
+{
+    DirectX::XMFLOAT3 position;
+    DirectX::XMFLOAT3 color;
+};
+
 class App
 {
     static constexpr size_t NUM_FRAMES = 2;
@@ -66,6 +72,8 @@ class App
 
     ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
 
+    ComPtr<ID3D12Resource> m_triangle_vertex_buffer;
+    D3D12_VERTEX_BUFFER_VIEW m_triangle_vertex_buffer_view;
     ComPtr<ID3D12RootSignature> m_triangle_root_signature;
     ComPtr<ID3D12PipelineState> m_triangle_pipeline;
 

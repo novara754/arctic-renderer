@@ -1,6 +1,7 @@
 #include "app.hpp"
 
 #include <chrono>
+#include <cstddef>
 
 #include <SDL3/SDL_events.h>
 
@@ -244,9 +245,42 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     spdlog::trace("App::init: created fence and fence event");
 
     // ------------
-    // Create triange pipeline state
+    // Create triangle pipeline state
     // -------
     {
+        std::array<Vertex, 3> vertices{
+            Vertex{{0.0f, 0.8f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+            Vertex{{-0.9f, -0.9f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+            Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        };
+        CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_UPLOAD);
+        CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices));
+        DXERR(
+            m_device->CreateCommittedResource(
+                &heap_props,
+                D3D12_HEAP_FLAG_NONE,
+                &resource_desc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_triangle_vertex_buffer)
+            ),
+            "App::init: failed to create triangle vertex buffer"
+        );
+
+        void *vertex_buffer_ptr;
+        D3D12_RANGE range{};
+        DXERR(
+            m_triangle_vertex_buffer->Map(0, &range, &vertex_buffer_ptr),
+            "App::init: failed to map triangle vertex buffer"
+        );
+        std::memcpy(vertex_buffer_ptr, vertices.data(), sizeof(vertices));
+        m_triangle_vertex_buffer->Unmap(0, nullptr);
+
+        m_triangle_vertex_buffer_view.BufferLocation =
+            m_triangle_vertex_buffer->GetGPUVirtualAddress();
+        m_triangle_vertex_buffer_view.StrideInBytes = sizeof(Vertex);
+        m_triangle_vertex_buffer_view.SizeInBytes = sizeof(vertices);
+
         ComPtr<ID3DBlob> vs_code, ps_code;
         if (!compile_shader(L"../shaders/triangle.hlsl", "vs_main", "vs_5_0", &vs_code))
         {
@@ -279,7 +313,7 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
             root_parameters.data(),
             0,
             nullptr,
-            D3D12_ROOT_SIGNATURE_FLAG_NONE
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
         );
         DXERR(
             D3D12SerializeRootSignature(
@@ -300,6 +334,27 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
             "App::init: failed to create triangle root signature"
         );
         spdlog::trace("App::init: created triangle root signature");
+
+        std::array vertex_layout{
+            D3D12_INPUT_ELEMENT_DESC{
+                .SemanticName = "POSITION",
+                .SemanticIndex = 0,
+                .Format = DXGI_FORMAT_R32G32B32_FLOAT,
+                .InputSlot = 0,
+                .AlignedByteOffset = offsetof(Vertex, position),
+                .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                .InstanceDataStepRate = 0,
+            },
+            D3D12_INPUT_ELEMENT_DESC{
+                .SemanticName = "COLOR",
+                .SemanticIndex = 0,
+                .Format = DXGI_FORMAT_R32G32B32_FLOAT,
+                .InputSlot = 0,
+                .AlignedByteOffset = offsetof(Vertex, color),
+                .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                .InstanceDataStepRate = 0,
+            },
+        };
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
         pipeline_desc.pRootSignature = m_triangle_root_signature.Get();
@@ -336,6 +391,10 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
             .AntialiasedLineEnable = FALSE,
             .ForcedSampleCount = 0,
             .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+        };
+        pipeline_desc.InputLayout = {
+            .pInputElementDescs = vertex_layout.data(),
+            .NumElements = static_cast<UINT>(vertex_layout.size()),
         };
         pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         pipeline_desc.NumRenderTargets = 1;
@@ -471,6 +530,7 @@ bool App::render_frame()
         m_command_list->SetGraphicsRoot32BitConstants(0, 3, m_top_vertex_color.data(), 0);
         m_command_list->SetPipelineState(m_triangle_pipeline.Get());
         m_command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_command_list->IASetVertexBuffers(0, 1, &m_triangle_vertex_buffer_view);
         m_command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
         D3D12_VIEWPORT viewport{
             .TopLeftX = 0.0f,
