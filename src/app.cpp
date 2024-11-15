@@ -296,21 +296,21 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     }
 
     // ------------
-    // Create triangle pipeline state
+    // Create forward pipeline state
     // -------
     {
         ComPtr<ID3DBlob> vs_code, ps_code;
-        if (!compile_shader(L"../shaders/triangle.hlsl", "vs_main", "vs_5_0", &vs_code))
+        if (!compile_shader(L"../shaders/forward.hlsl", "vs_main", "vs_5_0", &vs_code))
         {
             spdlog::error("App::init: failed to compile vertex shader");
             return false;
         }
-        if (!compile_shader(L"../shaders/triangle.hlsl", "ps_main", "ps_5_0", &ps_code))
+        if (!compile_shader(L"../shaders/forward.hlsl", "ps_main", "ps_5_0", &ps_code))
         {
             spdlog::error("App::init: failed to compile pixel shader");
             return false;
         }
-        spdlog::trace("App::init: compiled triangle shaders");
+        spdlog::trace("App::init: compiled forward shaders");
 
         {
             if (!create_depth_texture(m_window_size.width, m_window_size.height, m_depth_texture))
@@ -402,18 +402,18 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
                 &root_signature,
                 &error
             ),
-            "App::init: failed to serialize triangle root signature"
+            "App::init: failed to serialize forward root signature"
         );
         DXERR(
             m_device->CreateRootSignature(
                 0,
                 root_signature->GetBufferPointer(),
                 root_signature->GetBufferSize(),
-                IID_PPV_ARGS(&m_triangle_root_signature)
+                IID_PPV_ARGS(&m_forward_root_signature)
             ),
-            "App::init: failed to create triangle root signature"
+            "App::init: failed to create forward root signature"
         );
-        spdlog::trace("App::init: created triangle root signature");
+        spdlog::trace("App::init: created forward root signature");
 
         std::array vertex_layout{
             D3D12_INPUT_ELEMENT_DESC{
@@ -446,7 +446,7 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         };
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
-        pipeline_desc.pRootSignature = m_triangle_root_signature.Get();
+        pipeline_desc.pRootSignature = m_forward_root_signature.Get();
         pipeline_desc.VS = CD3DX12_SHADER_BYTECODE(vs_code.Get());
         pipeline_desc.PS = CD3DX12_SHADER_BYTECODE(ps_code.Get());
         pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
@@ -462,10 +462,10 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         pipeline_desc.SampleDesc = {1, 0};
         DXERR(
             m_device
-                ->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&m_triangle_pipeline)),
-            "App::init: failed to create triangle pipeline state"
+                ->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&m_forward_pipeline)),
+            "App::init: failed to create forward pipeline state"
         );
-        spdlog::trace("App::init: created triangle pipeline state");
+        spdlog::trace("App::init: created forward pipeline state");
     }
 
     // ------------
@@ -810,10 +810,10 @@ bool App::render_frame()
         m_command_list
             ->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-        m_command_list->SetGraphicsRootSignature(m_triangle_root_signature.Get());
+        m_command_list->SetGraphicsRootSignature(m_forward_root_signature.Get());
         std::array heaps{m_srv_heap.Get()};
         m_command_list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
-        m_command_list->SetPipelineState(m_triangle_pipeline.Get());
+        m_command_list->SetPipelineState(m_forward_pipeline.Get());
         m_command_list->SetGraphicsRoot32BitConstants(0, 2 * 4 * 4, &camera_matrices, 0);
         m_command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);

@@ -172,8 +172,8 @@ class App
     ComPtr<ID3D12DescriptorHeap> m_dsv_descriptor_heap;
     UINT m_dsv_descriptor_size;
     ComPtr<ID3D12Resource> m_depth_texture;
-    ComPtr<ID3D12RootSignature> m_triangle_root_signature;
-    ComPtr<ID3D12PipelineState> m_triangle_pipeline;
+    ComPtr<ID3D12RootSignature> m_forward_root_signature;
+    ComPtr<ID3D12PipelineState> m_forward_pipeline;
 
     std::array<float, 3> m_background_color{1.0f, 0.5f, 0.1f};
 
