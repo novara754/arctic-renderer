@@ -324,9 +324,7 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
                 m_window_size.height
             );
             resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-            D3D12_CLEAR_VALUE clear_value{};
-            clear_value.DepthStencil.Depth = 1.0f;
-            clear_value.Format = DXGI_FORMAT_D32_FLOAT;
+            CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
             DXERR(
                 m_device->CreateCommittedResource(
                     &heap_props,
@@ -434,48 +432,14 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
         pipeline_desc.pRootSignature = m_triangle_root_signature.Get();
-        pipeline_desc.VS = {
-            .pShaderBytecode = vs_code->GetBufferPointer(),
-            .BytecodeLength = vs_code->GetBufferSize(),
-        };
-        pipeline_desc.PS = {
-            .pShaderBytecode = ps_code->GetBufferPointer(),
-            .BytecodeLength = ps_code->GetBufferSize(),
-        };
-        pipeline_desc.BlendState.RenderTarget[0] = {
-            .BlendEnable = FALSE,
-            .LogicOpEnable = FALSE,
-            .SrcBlend = D3D12_BLEND_ONE,
-            .DestBlend = D3D12_BLEND_ZERO,
-            .BlendOp = D3D12_BLEND_OP_ADD,
-            .SrcBlendAlpha = D3D12_BLEND_ONE,
-            .DestBlendAlpha = D3D12_BLEND_ZERO,
-            .BlendOpAlpha = D3D12_BLEND_OP_ADD,
-            .LogicOp = D3D12_LOGIC_OP_NOOP,
-            .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
-        };
+        pipeline_desc.VS = CD3DX12_SHADER_BYTECODE(vs_code.Get());
+        pipeline_desc.PS = CD3DX12_SHADER_BYTECODE(ps_code.Get());
+        pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
         pipeline_desc.SampleMask = ~0u;
-        pipeline_desc.RasterizerState = {
-            .FillMode = D3D12_FILL_MODE_SOLID,
-            .CullMode = D3D12_CULL_MODE_BACK,
-            .FrontCounterClockwise = TRUE,
-            .DepthBias = 0,
-            .DepthBiasClamp = 0.0f,
-            .SlopeScaledDepthBias = 0.0f,
-            .DepthClipEnable = TRUE,
-            .MultisampleEnable = FALSE,
-            .AntialiasedLineEnable = FALSE,
-            .ForcedSampleCount = 0,
-            .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
-        };
-        pipeline_desc.DepthStencilState.DepthEnable = TRUE;
-        pipeline_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-        pipeline_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-        pipeline_desc.DepthStencilState.StencilEnable = FALSE;
-        pipeline_desc.InputLayout = {
-            .pInputElementDescs = vertex_layout.data(),
-            .NumElements = static_cast<UINT>(vertex_layout.size()),
-        };
+        pipeline_desc.RasterizerState = CD3DX12_RASTERIZER_DESC(CD3DX12_DEFAULT());
+        pipeline_desc.RasterizerState.FrontCounterClockwise = TRUE;
+        pipeline_desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(CD3DX12_DEFAULT());
+        pipeline_desc.InputLayout = {vertex_layout.data(), static_cast<UINT>(vertex_layout.size())};
         pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         pipeline_desc.NumRenderTargets = 1;
         pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
