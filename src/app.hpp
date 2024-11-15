@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <string>
+#include <vector>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -34,7 +36,73 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 struct Vertex
 {
     DirectX::XMFLOAT3 position;
-    DirectX::XMFLOAT3 color;
+    DirectX::XMFLOAT3 normal;
+    DirectX::XMFLOAT2 tex_coords;
+};
+
+struct Mesh
+{
+    ComPtr<ID3D12Resource> vertex_buffer;
+    D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
+
+    ComPtr<ID3D12Resource> index_buffer;
+    D3D12_INDEX_BUFFER_VIEW index_buffer_view;
+
+    uint32_t index_count;
+};
+
+struct Camera
+{
+    DirectX::XMFLOAT3 eye;
+    DirectX::XMFLOAT3 rotation;
+    DirectX::XMFLOAT3 up;
+    float aspect;
+    float fov_y;
+    float near_z;
+    float far_z;
+
+    [[nodiscard]] DirectX::XMFLOAT4X4 view_matrix() const
+    {
+        using namespace DirectX;
+
+        XMFLOAT3 forward(
+            XMScalarCos(XMConvertToRadians(this->rotation.x)) *
+                XMScalarCos(XMConvertToRadians(this->rotation.y)),
+            XMScalarSin(XMConvertToRadians(this->rotation.x)),
+            XMScalarCos(XMConvertToRadians(this->rotation.x)) *
+                XMScalarSin(XMConvertToRadians(this->rotation.y))
+        );
+
+        XMMATRIX view = XMMatrixLookToRH(
+            XMLoadFloat3(&this->eye),
+            XMLoadFloat3(&forward),
+            XMLoadFloat3(&this->up)
+        );
+
+        XMFLOAT4X4 ret;
+        XMStoreFloat4x4(&ret, view);
+
+        return ret;
+    }
+
+    [[nodiscard]] DirectX::XMFLOAT4X4 proj_matrix() const
+    {
+        using namespace DirectX;
+
+        XMMATRIX proj =
+            XMMatrixPerspectiveFovRH(this->fov_y, this->aspect, this->near_z, this->far_z);
+
+        XMFLOAT4X4 ret;
+        XMStoreFloat4x4(&ret, proj);
+        return ret;
+    }
+};
+
+struct Scene
+{
+    Camera camera;
+    std::vector<Mesh> meshes;
+    std::vector<size_t> objects;
 };
 
 class App
@@ -81,16 +149,32 @@ class App
 
     ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
 
-    ComPtr<ID3D12Resource> m_triangle_vertex_buffer;
-    D3D12_VERTEX_BUFFER_VIEW m_triangle_vertex_buffer_view;
+    std::string m_scene_path;
+    Scene m_scene{
+        .camera{
+            .eye = {-8.0f, 5.0f, 0.0f},
+            .rotation = {-20.0f, 0.0f, 0.0f},
+            .up = {0.0f, 1.0f, 0.0f},
+            .aspect = 16.0f / 9.0f,
+            .fov_y = 45.0f,
+            .near_z = 0.1f,
+            .far_z = 1000.0f,
+        },
+        .meshes{},
+        .objects{},
+    };
+
+    ComPtr<ID3D12DescriptorHeap> m_dsv_descriptor_heap;
+    UINT m_dsv_descriptor_size;
+    ComPtr<ID3D12Resource> m_depth_texture;
     ComPtr<ID3D12RootSignature> m_triangle_root_signature;
     ComPtr<ID3D12PipelineState> m_triangle_pipeline;
 
     std::array<float, 3> m_background_color{1.0f, 0.5f, 0.1f};
-    std::array<float, 3> m_top_vertex_color{1.0f, 0.0f, 0.0f};
 
   public:
-    explicit App(SDL_Window *window) : m_window(window)
+    explicit App(SDL_Window *window, const std::string &scene_path)
+        : m_window(window), m_scene_path(scene_path)
     {
     }
 
@@ -99,6 +183,8 @@ class App
     void run();
 
   private:
+    [[nodiscard]] bool load_scene(const std::string &path, Scene &out_scene);
+
     [[nodiscard]] bool render_frame();
 
     void build_ui();

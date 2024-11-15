@@ -6,8 +6,16 @@ include(FetchContent)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(BUILD_SHARED_LIBS OFF)
+
 set(SDL_STATIC ON)
-set(SDL_SHARED OFF)
+
+set(ASSIMP_NO_EXPORT ON)
+set(ASSIMP_BUILD_TESTS OFF)
+set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF)
+set(ASSIMP_BUILD_GLTF_IMPORTER ON)
+set(ASSIMP_BUILD_OBJ_IMPORTER ON)
 
 FetchContent_Declare(
         spdlog
@@ -45,6 +53,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(DirectX-Headers)
 
+FetchContent_Declare(
+        assimp
+        SYSTEM
+        GIT_REPOSITORY "https://github.com/assimp/assimp"
+        GIT_TAG "v5.4.3"
+        EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(assimp)
+
 add_executable(arctic
         src/main.cpp
         src/app.cpp
@@ -69,6 +86,7 @@ target_include_directories(arctic PRIVATE ${stb_SOURCE_DIR})
 target_link_libraries(arctic PRIVATE DirectX-Headers)
 target_link_libraries(arctic PRIVATE spdlog::spdlog)
 target_link_libraries(arctic PRIVATE SDL3::SDL3-static)
+target_link_libraries(arctic PRIVATE assimp::assimp)
 target_link_libraries(arctic PRIVATE d3d12.lib dxgi.lib dxguid.lib d3dcompiler.lib)
 
 add_custom_command(

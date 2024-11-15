@@ -5,9 +5,15 @@
 
 #include "app.hpp"
 
-int main()
+int main(int argc, char **argv)
 {
     spdlog::set_level(spdlog::level::trace);
+
+    if (argc != 2)
+    {
+        spdlog::error("main: usage: arctic <scene>");
+        return false;
+    }
 
     SDL_SetAppMetadata("Arctic", "0.1", nullptr);
     spdlog::trace("main: set sdl app metadata");
@@ -30,7 +36,7 @@ int main()
 
     try
     {
-        App app(window);
+        App app(window, argv[1]);
         if (app.init())
         {
             spdlog::trace("main: initialized app");

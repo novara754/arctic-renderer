@@ -5,6 +5,10 @@
 
 #include <SDL3/SDL_events.h>
 
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+
 #include "imgui.h"
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_sdl3.h"
@@ -293,38 +297,11 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     // Create triangle pipeline state
     // -------
     {
-        std::array<Vertex, 3> vertices{
-            Vertex{{0.0f, 0.8f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-            Vertex{{-0.9f, -0.9f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-            Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-        };
-        if (!create_buffer(
-                sizeof(vertices),
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-                D3D12_HEAP_TYPE_DEFAULT,
-                m_triangle_vertex_buffer
-            ))
+        if (!load_scene(m_scene_path, m_scene))
         {
-            spdlog::error("App::init: failed to create triangle vertex buffer");
+            spdlog::error("App::init: failed to load scene");
             return false;
         }
-        m_triangle_vertex_buffer->SetName(L"triangle vertex buffer");
-
-        if (!upload_to_resource(
-                m_triangle_vertex_buffer.Get(),
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-                vertices.data(),
-                sizeof(vertices)
-            ))
-        {
-            spdlog::error("App::init: failed to upload data to triangle vertex buffer");
-            return false;
-        }
-
-        m_triangle_vertex_buffer_view.BufferLocation =
-            m_triangle_vertex_buffer->GetGPUVirtualAddress();
-        m_triangle_vertex_buffer_view.StrideInBytes = sizeof(Vertex);
-        m_triangle_vertex_buffer_view.SizeInBytes = sizeof(vertices);
 
         ComPtr<ID3DBlob> vs_code, ps_code;
         if (!compile_shader(L"../shaders/triangle.hlsl", "vs_main", "vs_5_0", &vs_code))
@@ -339,6 +316,51 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         }
         spdlog::trace("App::init: compiled triangle shaders");
 
+        {
+            CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
+            CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
+                DXGI_FORMAT_D32_FLOAT,
+                m_window_size.width,
+                m_window_size.height
+            );
+            resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+            D3D12_CLEAR_VALUE clear_value{};
+            clear_value.DepthStencil.Depth = 1.0f;
+            clear_value.Format = DXGI_FORMAT_D32_FLOAT;
+            DXERR(
+                m_device->CreateCommittedResource(
+                    &heap_props,
+                    D3D12_HEAP_FLAG_NONE,
+                    &resource_desc,
+                    D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                    &clear_value,
+                    IID_PPV_ARGS(&m_depth_texture)
+                ),
+                "App::init: failed to create depth texture"
+            );
+            spdlog::trace("App::init: created depth texture");
+
+            if (!create_descriptor_heap(
+                    D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+                    1,
+                    D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                    m_dsv_descriptor_heap
+                ))
+            {
+                spdlog::error("App::init: failed to create dsv descriptor heap");
+                return false;
+            }
+            spdlog::trace("App::init: created dsv descriptor heap");
+
+            m_dsv_descriptor_size =
+                m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+            CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(
+                m_dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+            );
+            m_device->CreateDepthStencilView(m_depth_texture.Get(), nullptr, dsv_handle);
+        }
+
         ComPtr<ID3DBlob> root_signature;
         ComPtr<ID3DBlob> error;
         CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc;
@@ -349,7 +371,7 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
                     {
                         .ShaderRegister = 0,
                         .RegisterSpace = 0,
-                        .Num32BitValues = 3,
+                        .Num32BitValues = 2 * 4 * 4, // 2 float4x4
                     }
             },
         };
@@ -391,11 +413,20 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
                 .InstanceDataStepRate = 0,
             },
             D3D12_INPUT_ELEMENT_DESC{
-                .SemanticName = "COLOR",
+                .SemanticName = "NORMAL",
                 .SemanticIndex = 0,
                 .Format = DXGI_FORMAT_R32G32B32_FLOAT,
                 .InputSlot = 0,
-                .AlignedByteOffset = offsetof(Vertex, color),
+                .AlignedByteOffset = offsetof(Vertex, normal),
+                .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                .InstanceDataStepRate = 0,
+            },
+            D3D12_INPUT_ELEMENT_DESC{
+                .SemanticName = "TEXCOORD",
+                .SemanticIndex = 0,
+                .Format = DXGI_FORMAT_R32G32_FLOAT,
+                .InputSlot = 0,
+                .AlignedByteOffset = offsetof(Vertex, tex_coords),
                 .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
                 .InstanceDataStepRate = 0,
             },
@@ -426,7 +457,7 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         pipeline_desc.SampleMask = ~0u;
         pipeline_desc.RasterizerState = {
             .FillMode = D3D12_FILL_MODE_SOLID,
-            .CullMode = D3D12_CULL_MODE_NONE,
+            .CullMode = D3D12_CULL_MODE_BACK,
             .FrontCounterClockwise = TRUE,
             .DepthBias = 0,
             .DepthBiasClamp = 0.0f,
@@ -437,6 +468,10 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
             .ForcedSampleCount = 0,
             .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
         };
+        pipeline_desc.DepthStencilState.DepthEnable = TRUE;
+        pipeline_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        pipeline_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+        pipeline_desc.DepthStencilState.StencilEnable = FALSE;
         pipeline_desc.InputLayout = {
             .pInputElementDescs = vertex_layout.data(),
             .NumElements = static_cast<UINT>(vertex_layout.size()),
@@ -444,6 +479,7 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         pipeline_desc.NumRenderTargets = 1;
         pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         pipeline_desc.SampleDesc = {1, 0};
         DXERR(
             m_device
@@ -530,6 +566,139 @@ void App::run()
     ImGui::DestroyContext();
 }
 
+bool App::load_scene(const std::string &path, Scene &out_scene)
+{
+    Assimp::Importer importer;
+
+    const aiScene *scene =
+        importer.ReadFile(path.c_str(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+    if (scene == nullptr)
+    {
+        spdlog::error("App::load_scene: failed to load file");
+        return false;
+    }
+
+    if (scene->mRootNode == nullptr)
+    {
+        spdlog::error("App::load_scene: file has no root node");
+        return false;
+    }
+
+    for (size_t mesh_idx = 0; mesh_idx < scene->mNumMeshes; ++mesh_idx)
+    {
+        const aiMesh *ai_mesh = scene->mMeshes[mesh_idx];
+
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+
+        for (size_t vertex_idx = 0; vertex_idx < ai_mesh->mNumVertices; ++vertex_idx)
+        {
+            Vertex vertex{
+                .position =
+                    {
+                        ai_mesh->mVertices[vertex_idx].x,
+                        ai_mesh->mVertices[vertex_idx].y,
+                        ai_mesh->mVertices[vertex_idx].z,
+                    },
+                .normal =
+                    {
+                        ai_mesh->mNormals[vertex_idx].x,
+                        ai_mesh->mNormals[vertex_idx].y,
+                        ai_mesh->mNormals[vertex_idx].z,
+                    },
+                .tex_coords =
+                    {
+                        ai_mesh->mTextureCoords[0][vertex_idx].x,
+                        ai_mesh->mTextureCoords[0][vertex_idx].y,
+                    },
+            };
+            vertices.emplace_back(vertex);
+        }
+
+        for (size_t face_idx = 0; face_idx < ai_mesh->mNumFaces; ++face_idx)
+        {
+            const aiFace &face = ai_mesh->mFaces[face_idx];
+            for (size_t index_idx = 0; index_idx < face.mNumIndices; ++index_idx)
+            {
+                indices.emplace_back(static_cast<uint32_t>(face.mIndices[index_idx]));
+            }
+        }
+
+        bool res = true;
+
+        Mesh mesh;
+
+        uint64_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
+        res &= create_buffer(
+            vertex_buffer_size,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+            D3D12_HEAP_TYPE_DEFAULT,
+            mesh.vertex_buffer
+        );
+
+        res &= upload_to_resource(
+            mesh.vertex_buffer.Get(),
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+            vertices.data(),
+            vertex_buffer_size
+        );
+
+        uint64_t index_buffer_size = indices.size() * sizeof(uint32_t);
+        res &= create_buffer(
+            index_buffer_size,
+            D3D12_RESOURCE_STATE_INDEX_BUFFER,
+            D3D12_HEAP_TYPE_DEFAULT,
+            mesh.index_buffer
+        );
+
+        res &= upload_to_resource(
+            mesh.index_buffer.Get(),
+            D3D12_RESOURCE_STATE_INDEX_BUFFER,
+            indices.data(),
+            index_buffer_size
+        );
+
+        if (!res)
+        {
+            spdlog::error(
+                "App::load_scene: failed to create vertex and/or index buffers for mesh #{}",
+                mesh_idx
+            );
+        }
+
+        mesh.vertex_buffer_view.BufferLocation = mesh.vertex_buffer->GetGPUVirtualAddress();
+        mesh.vertex_buffer_view.StrideInBytes = sizeof(Vertex);
+        mesh.vertex_buffer_view.SizeInBytes = static_cast<UINT>(vertex_buffer_size);
+
+        mesh.index_buffer_view.BufferLocation = mesh.index_buffer->GetGPUVirtualAddress();
+        mesh.index_buffer_view.Format = DXGI_FORMAT_R32_UINT;
+        mesh.index_buffer_view.SizeInBytes = static_cast<UINT>(index_buffer_size);
+
+        mesh.index_count = static_cast<uint32_t>(indices.size());
+
+        out_scene.meshes.emplace_back(mesh);
+    }
+
+    std::vector nodes_to_process{scene->mRootNode};
+    while (!nodes_to_process.empty())
+    {
+        const aiNode *node = nodes_to_process.back();
+        nodes_to_process.pop_back();
+
+        for (size_t i = 0; i < node->mNumChildren; ++i)
+        {
+            nodes_to_process.emplace_back(node->mChildren[i]);
+        }
+
+        for (unsigned int i = 0; i < node->mNumMeshes; ++i)
+        {
+            out_scene.objects.emplace_back(node->mMeshes[i]);
+        }
+    }
+
+    return true;
+}
+
 bool App::render_frame()
 {
     ImGui_ImplSDL3_NewFrame();
@@ -566,21 +735,36 @@ bool App::render_frame()
     }
 
     {
+        struct
+        {
+            DirectX::XMFLOAT4X4 view;
+            DirectX::XMFLOAT4X4 proj;
+        } camera_matrices{
+            .view = m_scene.camera.view_matrix(),
+            .proj = m_scene.camera.proj_matrix(),
+        };
+        assert(sizeof(camera_matrices) == 2 * 4 * 4 * 4);
+
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(
             m_rtv_descriptor_heap->GetCPUDescriptorHandleForHeapStart(),
             m_current_backbuffer_index,
             m_rtv_descriptor_size
         );
+        CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(
+            m_dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+        );
+
         std::array<float, 4>
             clear_color{m_background_color[0], m_background_color[1], m_background_color[2], 1.0};
         m_command_list->ClearRenderTargetView(rtv_handle, clear_color.data(), 0, nullptr);
+        m_command_list
+            ->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
         m_command_list->SetGraphicsRootSignature(m_triangle_root_signature.Get());
-        m_command_list->SetGraphicsRoot32BitConstants(0, 3, m_top_vertex_color.data(), 0);
         m_command_list->SetPipelineState(m_triangle_pipeline.Get());
+        m_command_list->SetGraphicsRoot32BitConstants(0, 2 * 4 * 4, &camera_matrices, 0);
         m_command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        m_command_list->IASetVertexBuffers(0, 1, &m_triangle_vertex_buffer_view);
-        m_command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
+        m_command_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
         D3D12_VIEWPORT viewport{
             .TopLeftX = 0.0f,
             .TopLeftY = 0.0f,
@@ -597,7 +781,13 @@ bool App::render_frame()
             .bottom = m_window_size.height,
         };
         m_command_list->RSSetScissorRects(1, &scissor);
-        m_command_list->DrawInstanced(3, 1, 0, 0);
+
+        for (size_t mesh_idx : m_scene.objects)
+        {
+            m_command_list->IASetVertexBuffers(0, 1, &m_scene.meshes[mesh_idx].vertex_buffer_view);
+            m_command_list->IASetIndexBuffer(&m_scene.meshes[mesh_idx].index_buffer_view);
+            m_command_list->DrawIndexedInstanced(m_scene.meshes[mesh_idx].index_count, 1, 0, 0, 0);
+        }
 
         ImGui::Render();
         std::array descriptor_heaps{m_imgui_cbv_srv_heap.Get()};
@@ -640,7 +830,10 @@ void App::build_ui()
     ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
         ImGui::ColorEdit3("Background Color", m_background_color.data());
-        ImGui::ColorEdit3("Top Vertex Color", m_top_vertex_color.data());
+
+        ImGui::SeparatorText("Camera");
+        ImGui::DragFloat3("Eye", &m_scene.camera.eye.x, 0.1f);
+        ImGui::DragFloat3("Rot", &m_scene.camera.rotation.x, 0.1f);
     }
     ImGui::End();
 }
