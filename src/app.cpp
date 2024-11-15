@@ -687,8 +687,8 @@ bool App::render_frame()
     {
         struct
         {
-            DirectX::XMFLOAT4X4 view;
-            DirectX::XMFLOAT4X4 proj;
+            DirectX::XMMATRIX view;
+            DirectX::XMMATRIX proj;
         } camera_matrices{
             .view = m_scene.camera.view_matrix(),
             .proj = m_scene.camera.proj_matrix(),
@@ -783,7 +783,8 @@ void App::build_ui()
 
         ImGui::SeparatorText("Camera");
         ImGui::DragFloat3("Eye", &m_scene.camera.eye.x, 0.1f);
-        ImGui::DragFloat3("Rot", &m_scene.camera.rotation.x, 0.1f);
+        ImGui::DragFloat2("Rot", &m_scene.camera.rotation.x, 0.1f, -360.0f, 360.0f);
+        ImGui::DragFloat2("Z Near/Far", m_scene.camera.z_near_far.data(), 0.01f, 0.001f, 10000.0f);
     }
     ImGui::End();
 }

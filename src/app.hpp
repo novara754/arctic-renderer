@@ -54,14 +54,12 @@ struct Mesh
 struct Camera
 {
     DirectX::XMFLOAT3 eye;
-    DirectX::XMFLOAT3 rotation;
-    DirectX::XMFLOAT3 up;
+    DirectX::XMFLOAT2 rotation;
     float aspect;
     float fov_y;
-    float near_z;
-    float far_z;
+    std::array<float, 2> z_near_far;
 
-    [[nodiscard]] DirectX::XMFLOAT4X4 view_matrix() const
+    [[nodiscard]] DirectX::XMMATRIX view_matrix() const
     {
         using namespace DirectX;
 
@@ -73,28 +71,25 @@ struct Camera
                 XMScalarSin(XMConvertToRadians(this->rotation.y))
         );
 
-        XMMATRIX view = XMMatrixLookToRH(
+        XMFLOAT3 up(0.0f, 1.0f, 0.0f);
+
+        return XMMatrixLookToRH(
             XMLoadFloat3(&this->eye),
             XMLoadFloat3(&forward),
-            XMLoadFloat3(&this->up)
+            XMLoadFloat3(&up)
         );
-
-        XMFLOAT4X4 ret;
-        XMStoreFloat4x4(&ret, view);
-
-        return ret;
     }
 
-    [[nodiscard]] DirectX::XMFLOAT4X4 proj_matrix() const
+    [[nodiscard]] DirectX::XMMATRIX proj_matrix() const
     {
         using namespace DirectX;
 
-        XMMATRIX proj =
-            XMMatrixPerspectiveFovRH(this->fov_y, this->aspect, this->near_z, this->far_z);
-
-        XMFLOAT4X4 ret;
-        XMStoreFloat4x4(&ret, proj);
-        return ret;
+        return XMMatrixPerspectiveFovRH(
+            XMConvertToRadians(this->fov_y),
+            this->aspect,
+            this->z_near_far[0],
+            this->z_near_far[1]
+        );
     }
 };
 
@@ -153,12 +148,10 @@ class App
     Scene m_scene{
         .camera{
             .eye = {-8.0f, 5.0f, 0.0f},
-            .rotation = {-20.0f, 0.0f, 0.0f},
-            .up = {0.0f, 1.0f, 0.0f},
+            .rotation = {-20.0f, 0.0f},
             .aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT),
             .fov_y = 45.0f,
-            .near_z = 0.1f,
-            .far_z = 1000.0f,
+            .z_near_far = {0.1f, 1000.0f},
         },
         .meshes{},
         .objects{},
