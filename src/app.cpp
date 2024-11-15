@@ -136,8 +136,8 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     // Create swapchain
     // -------
     DXGI_SWAP_CHAIN_DESC1 swapchain_desc{
-        .Width = WINDOW_WIDTH,
-        .Height = WINDOW_HEIGHT,
+        .Width = static_cast<UINT>(m_window_size.width),
+        .Height = static_cast<UINT>(m_window_size.height),
         .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
         .Stereo = FALSE,
         // must be {1, 0} for flip model
@@ -317,26 +317,11 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         spdlog::trace("App::init: compiled triangle shaders");
 
         {
-            CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
-            CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
-                DXGI_FORMAT_D32_FLOAT,
-                m_window_size.width,
-                m_window_size.height
-            );
-            resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-            CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
-            DXERR(
-                m_device->CreateCommittedResource(
-                    &heap_props,
-                    D3D12_HEAP_FLAG_NONE,
-                    &resource_desc,
-                    D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                    &clear_value,
-                    IID_PPV_ARGS(&m_depth_texture)
-                ),
-                "App::init: failed to create depth texture"
-            );
-            spdlog::trace("App::init: created depth texture");
+            if (!create_depth_texture(m_window_size.width, m_window_size.height, m_depth_texture))
+            {
+                spdlog::error("App::init: failed to create depth texture");
+                return false;
+            }
 
             if (!create_descriptor_heap(
                     D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
@@ -353,10 +338,11 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
             m_dsv_descriptor_size =
                 m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
-            CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(
+            m_device->CreateDepthStencilView(
+                m_depth_texture.Get(),
+                nullptr,
                 m_dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
             );
-            m_device->CreateDepthStencilView(m_depth_texture.Get(), nullptr, dsv_handle);
         }
 
         ComPtr<ID3DBlob> root_signature;
@@ -812,8 +798,8 @@ bool App::handle_resize()
         return true;
     }
 
-    m_window_size.width = std::min(1, width);
-    m_window_size.height = std::min(1, height);
+    m_window_size.width = std::max(1, width);
+    m_window_size.height = std::max(1, height);
 
     if (!flush())
     {
@@ -849,6 +835,22 @@ bool App::handle_resize()
         spdlog::error("App::handle_resize: failed to update rtvs");
         return false;
     }
+
+    m_depth_texture.Reset();
+    if (!create_depth_texture(m_window_size.width, m_window_size.height, m_depth_texture))
+    {
+        spdlog::error("App::handle_resize: failed to create depth texture");
+        return false;
+    }
+
+    m_device->CreateDepthStencilView(
+        m_depth_texture.Get(),
+        nullptr,
+        m_dsv_descriptor_heap->GetCPUDescriptorHandleForHeapStart()
+    );
+
+    m_scene.camera.aspect =
+        static_cast<float>(m_window_size.width) / static_cast<float>(m_window_size.height);
 
     return true;
 }
@@ -951,6 +953,28 @@ bool App::create_buffer(
         ),
         "App::create_buffer: failed to create buffer"
     );
+    return true;
+}
+
+bool App::create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture)
+{
+    CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
+    CD3DX12_RESOURCE_DESC resource_desc =
+        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, width, height);
+    resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
+    DXERR(
+        m_device->CreateCommittedResource(
+            &heap_props,
+            D3D12_HEAP_FLAG_NONE,
+            &resource_desc,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            &clear_value,
+            IID_PPV_ARGS(&out_texture)
+        ),
+        "App::create_depth_texture: failed to create depth texture"
+    );
+
     return true;
 }
 

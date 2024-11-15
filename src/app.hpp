@@ -155,7 +155,7 @@ class App
             .eye = {-8.0f, 5.0f, 0.0f},
             .rotation = {-20.0f, 0.0f, 0.0f},
             .up = {0.0f, 1.0f, 0.0f},
-            .aspect = 16.0f / 9.0f,
+            .aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT),
             .fov_y = 45.0f,
             .near_z = 0.1f,
             .far_z = 1000.0f,
@@ -205,6 +205,9 @@ class App
         uint64_t size, D3D12_RESOURCE_STATES initial_state, D3D12_HEAP_TYPE heap_type,
         ComPtr<ID3D12Resource> &out_buffer
     );
+
+    [[nodiscard]] bool
+    create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture);
 
     [[nodiscard]] bool upload_to_resource(
         ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
