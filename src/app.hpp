@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,8 @@ struct Mesh
     D3D12_INDEX_BUFFER_VIEW index_buffer_view;
 
     uint32_t index_count;
+
+    size_t material_idx;
 };
 
 struct Camera
@@ -93,10 +96,16 @@ struct Camera
     }
 };
 
+struct Material
+{
+    ComPtr<ID3D12Resource> diffuse;
+};
+
 struct Scene
 {
     Camera camera;
     std::vector<Mesh> meshes;
+    std::vector<Material> materials;
     std::vector<size_t> objects;
 };
 
@@ -144,7 +153,7 @@ class App
 
     ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
 
-    std::string m_scene_path;
+    std::filesystem::path m_scene_path;
     Scene m_scene{
         .camera{
             .eye = {-8.0f, 5.0f, 0.0f},
@@ -157,6 +166,9 @@ class App
         .objects{},
     };
 
+    ComPtr<ID3D12DescriptorHeap> m_srv_heap;
+    UINT m_srv_descriptor_size;
+
     ComPtr<ID3D12DescriptorHeap> m_dsv_descriptor_heap;
     UINT m_dsv_descriptor_size;
     ComPtr<ID3D12Resource> m_depth_texture;
@@ -166,7 +178,7 @@ class App
     std::array<float, 3> m_background_color{1.0f, 0.5f, 0.1f};
 
   public:
-    explicit App(SDL_Window *window, const std::string &scene_path)
+    explicit App(SDL_Window *window, const std::filesystem::path &scene_path)
         : m_window(window), m_scene_path(scene_path)
     {
     }
@@ -176,7 +188,7 @@ class App
     void run();
 
   private:
-    [[nodiscard]] bool load_scene(const std::string &path, Scene &out_scene);
+    [[nodiscard]] bool load_scene(const std::filesystem::path &path, Scene &out_scene);
 
     [[nodiscard]] bool render_frame();
 
@@ -199,12 +211,22 @@ class App
         ComPtr<ID3D12Resource> &out_buffer
     );
 
+    [[nodiscard]] bool create_texture(
+        uint64_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_STATES initial_state,
+        ComPtr<ID3D12Resource> &out_texture
+    );
+
     [[nodiscard]] bool
     create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture);
 
-    [[nodiscard]] bool upload_to_resource(
+    [[nodiscard]] bool upload_to_buffer(
         ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
         uint64_t src_data_size
+    );
+
+    [[nodiscard]] bool upload_to_texture(
+        ID3D12Resource *dst_texture, D3D12_RESOURCE_STATES dst_texture_state, void *src_data,
+        uint64_t width, uint64_t height, uint64_t channels
     );
 
     [[nodiscard]] bool

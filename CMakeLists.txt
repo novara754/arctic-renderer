@@ -62,9 +62,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(assimp)
 
+FetchContent_Declare(
+        stb
+        SYSTEM
+        GIT_REPOSITORY "https://github.com/nothings/stb"
+        GIT_TAG "2e2bef463a5b53ddf8bb788e25da6b8506314c08"
+        EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(stb)
+
 add_executable(arctic
         src/main.cpp
         src/app.cpp
+
+        src/stb_image_impl.cpp
 
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -92,4 +103,9 @@ target_link_libraries(arctic PRIVATE d3d12.lib dxgi.lib dxguid.lib d3dcompiler.l
 add_custom_command(
         TARGET arctic POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_LIST_DIR}/shaders" "${CMAKE_CURRENT_BINARY_DIR}/shaders"
+)
+
+add_custom_command(
+        TARGET arctic POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_LIST_DIR}/assets" "${CMAKE_CURRENT_BINARY_DIR}/assets"
 )

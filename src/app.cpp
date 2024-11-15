@@ -13,6 +13,8 @@
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_sdl3.h"
 
+#include "stb_image.h"
+
 bool get_best_adapter(
     ComPtr<IDXGIFactory4> dxgi_factory4, ComPtr<IDXGIAdapter4> &out_dxgi_adapter4
 );
@@ -297,12 +299,6 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
     // Create triangle pipeline state
     // -------
     {
-        if (!load_scene(m_scene_path, m_scene))
-        {
-            spdlog::error("App::init: failed to load scene");
-            return false;
-        }
-
         ComPtr<ID3DBlob> vs_code, ps_code;
         if (!compile_shader(L"../shaders/triangle.hlsl", "vs_main", "vs_5_0", &vs_code))
         {
@@ -345,25 +341,58 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
             );
         }
 
+        {
+            if (!create_descriptor_heap(
+                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                    50,
+                    D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+                    m_srv_heap
+                ))
+            {
+                spdlog::error("App::init: failed to create srv descriptor heap");
+                return false;
+            }
+            spdlog::trace("App::init: created srv descriptor heap");
+
+            m_srv_descriptor_size =
+                m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        }
+
         ComPtr<ID3DBlob> root_signature;
         ComPtr<ID3DBlob> error;
+
+        std::array<CD3DX12_DESCRIPTOR_RANGE, 1> ranges{};
+        ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+        std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
+        root_parameters[0].InitAsConstants(2 * 4 * 4, 0);
+        root_parameters[1].InitAsDescriptorTable(
+            static_cast<UINT>(ranges.size()),
+            ranges.data(),
+            D3D12_SHADER_VISIBILITY_PIXEL
+        );
+
+        D3D12_STATIC_SAMPLER_DESC sampler{};
+        sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        sampler.MipLODBias = 0;
+        sampler.MaxAnisotropy = 0;
+        sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+        sampler.MinLOD = 0.0f;
+        sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        sampler.ShaderRegister = 0;
+        sampler.RegisterSpace = 0;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
         CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc;
-        std::array root_parameters{
-            D3D12_ROOT_PARAMETER{
-                .ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
-                .Constants =
-                    {
-                        .ShaderRegister = 0,
-                        .RegisterSpace = 0,
-                        .Num32BitValues = 2 * 4 * 4, // 2 float4x4
-                    }
-            },
-        };
         root_signature_desc.Init(
             static_cast<UINT>(root_parameters.size()),
             root_parameters.data(),
-            0,
-            nullptr,
+            1,
+            &sampler,
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
         );
         DXERR(
@@ -470,6 +499,12 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
         spdlog::trace("App::init: initialized imgui");
     }
 
+    if (!load_scene(m_scene_path, m_scene))
+    {
+        spdlog::error("App::init: failed to load scene");
+        return false;
+    }
+
     return true;
 }
 
@@ -516,12 +551,12 @@ void App::run()
     ImGui::DestroyContext();
 }
 
-bool App::load_scene(const std::string &path, Scene &out_scene)
+bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
 {
     Assimp::Importer importer;
 
     const aiScene *scene =
-        importer.ReadFile(path.c_str(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+        importer.ReadFile(path.string(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
     if (scene == nullptr)
     {
         spdlog::error("App::load_scene: failed to load file");
@@ -532,6 +567,69 @@ bool App::load_scene(const std::string &path, Scene &out_scene)
     {
         spdlog::error("App::load_scene: file has no root node");
         return false;
+    }
+
+    for (size_t mat_idx = 0; mat_idx < scene->mNumMaterials; ++mat_idx)
+    {
+        Material material;
+
+        std::filesystem::path diffuse_path = path;
+
+        const aiMaterial *ai_material = scene->mMaterials[mat_idx];
+        if (ai_material->GetTextureCount(aiTextureType_DIFFUSE) > 0)
+        {
+            aiString diffuse_name;
+            ai_material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuse_name);
+            diffuse_path.replace_filename(diffuse_name.C_Str());
+        }
+        else
+        {
+            spdlog::warn(
+                "App::load_scene: material #{} missing diffuse texture, using fallback",
+                mat_idx
+            );
+            diffuse_path = "../assets/white.png";
+        }
+
+        int width, height, channels = 4;
+        uint8_t *image_data =
+            stbi_load(diffuse_path.string().c_str(), &width, &height, nullptr, channels);
+        assert(image_data);
+
+        bool res = create_texture(
+            width,
+            height,
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            material.diffuse
+        );
+        res &= upload_to_texture(
+            material.diffuse.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            image_data,
+            width,
+            height,
+            channels
+        );
+        if (!res)
+        {
+            spdlog::error("App::load: failed to create diffuse texture for material #{}", mat_idx);
+            return false;
+        }
+
+        CD3DX12_CPU_DESCRIPTOR_HANDLE srv_handle(
+            m_srv_heap->GetCPUDescriptorHandleForHeapStart(),
+            static_cast<INT>(mat_idx),
+            m_srv_descriptor_size
+        );
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv_desc.Texture2D.MipLevels = 1;
+        m_device->CreateShaderResourceView(material.diffuse.Get(), &srv_desc, srv_handle);
+
+        out_scene.materials.emplace_back(material);
     }
 
     for (size_t mesh_idx = 0; mesh_idx < scene->mNumMeshes; ++mesh_idx)
@@ -586,7 +684,7 @@ bool App::load_scene(const std::string &path, Scene &out_scene)
             mesh.vertex_buffer
         );
 
-        res &= upload_to_resource(
+        res &= upload_to_buffer(
             mesh.vertex_buffer.Get(),
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
             vertices.data(),
@@ -601,7 +699,7 @@ bool App::load_scene(const std::string &path, Scene &out_scene)
             mesh.index_buffer
         );
 
-        res &= upload_to_resource(
+        res &= upload_to_buffer(
             mesh.index_buffer.Get(),
             D3D12_RESOURCE_STATE_INDEX_BUFFER,
             indices.data(),
@@ -625,6 +723,8 @@ bool App::load_scene(const std::string &path, Scene &out_scene)
         mesh.index_buffer_view.SizeInBytes = static_cast<UINT>(index_buffer_size);
 
         mesh.index_count = static_cast<uint32_t>(indices.size());
+
+        mesh.material_idx = ai_mesh->mMaterialIndex;
 
         out_scene.meshes.emplace_back(mesh);
     }
@@ -711,6 +811,8 @@ bool App::render_frame()
             ->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
         m_command_list->SetGraphicsRootSignature(m_triangle_root_signature.Get());
+        std::array heaps{m_srv_heap.Get()};
+        m_command_list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
         m_command_list->SetPipelineState(m_triangle_pipeline.Get());
         m_command_list->SetGraphicsRoot32BitConstants(0, 2 * 4 * 4, &camera_matrices, 0);
         m_command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -734,9 +836,17 @@ bool App::render_frame()
 
         for (size_t mesh_idx : m_scene.objects)
         {
-            m_command_list->IASetVertexBuffers(0, 1, &m_scene.meshes[mesh_idx].vertex_buffer_view);
-            m_command_list->IASetIndexBuffer(&m_scene.meshes[mesh_idx].index_buffer_view);
-            m_command_list->DrawIndexedInstanced(m_scene.meshes[mesh_idx].index_count, 1, 0, 0, 0);
+            const Mesh &mesh = m_scene.meshes[mesh_idx];
+
+            CD3DX12_GPU_DESCRIPTOR_HANDLE srv_handle(
+                m_srv_heap->GetGPUDescriptorHandleForHeapStart(),
+                static_cast<INT>(mesh.material_idx),
+                m_srv_descriptor_size
+            );
+            m_command_list->SetGraphicsRootDescriptorTable(1, srv_handle);
+            m_command_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
+            m_command_list->IASetIndexBuffer(&mesh.index_buffer_view);
+            m_command_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
         }
 
         ImGui::Render();
@@ -957,6 +1067,28 @@ bool App::create_buffer(
     return true;
 }
 
+bool App::create_texture(
+    uint64_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_STATES initial_state,
+    ComPtr<ID3D12Resource> &out_texture
+)
+{
+    CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
+    CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height);
+    DXERR(
+        m_device->CreateCommittedResource(
+            &heap_props,
+            D3D12_HEAP_FLAG_NONE,
+            &resource_desc,
+            initial_state,
+            nullptr,
+            IID_PPV_ARGS(&out_texture)
+        ),
+        "App::create_texture: failed to create texture"
+    );
+
+    return true;
+}
+
 bool App::create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture)
 {
     CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
@@ -979,7 +1111,7 @@ bool App::create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Res
     return true;
 }
 
-bool App::upload_to_resource(
+bool App::upload_to_buffer(
     ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
     uint64_t src_data_size
 )
@@ -992,19 +1124,14 @@ bool App::upload_to_resource(
             staging_buffer
         ))
     {
-        spdlog::error("App::upload_to_resource: failed to create staging buffer");
+        spdlog::error("App::upload_to_buffer: failed to create staging buffer");
         return false;
     }
 
     void *staging_buffer_ptr;
     DXERR(
         staging_buffer->Map(0, nullptr, &staging_buffer_ptr),
-        "App::upload_to_resource: failed to map staging buffer"
-    );
-    spdlog::debug(
-        "src_data = {}, src_data_size = {}",
-        spdlog::fmt_lib::ptr(src_data),
-        src_data_size
+        "App::upload_to_buffer: failed to map staging buffer"
     );
     std::memcpy(staging_buffer_ptr, src_data, src_data_size);
     staging_buffer->Unmap(0, nullptr);
@@ -1031,7 +1158,58 @@ bool App::upload_to_resource(
 
     if (!res)
     {
-        spdlog::error("App::upload_to_resource: immediate submit failed");
+        spdlog::error("App::upload_to_buffer: immediate submit failed");
+        return false;
+    }
+
+    return true;
+}
+
+bool App::upload_to_texture(
+    ID3D12Resource *dst_texture, D3D12_RESOURCE_STATES dst_texture_state, void *src_data,
+    uint64_t width, uint64_t height, uint64_t channels
+)
+{
+    uint64_t src_data_size = width * height * channels;
+    ComPtr<ID3D12Resource> staging_buffer;
+    if (!create_buffer(
+            src_data_size,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            D3D12_HEAP_TYPE_UPLOAD,
+            staging_buffer
+        ))
+    {
+        spdlog::error("App::upload_to_texture: failed to create staging buffer");
+        return false;
+    }
+
+    D3D12_SUBRESOURCE_DATA data{
+        .pData = src_data,
+        .RowPitch = static_cast<LONG_PTR>(width * channels),
+        .SlicePitch = static_cast<LONG_PTR>(width * height * channels),
+    };
+
+    bool res = immediate_submit([&](ID3D12GraphicsCommandList *cmd_list) {
+        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            dst_texture,
+            dst_texture_state,
+            D3D12_RESOURCE_STATE_COPY_DEST
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
+
+        UpdateSubresources(cmd_list, dst_texture, staging_buffer.Get(), 0, 0, 1, &data);
+
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            dst_texture,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            dst_texture_state
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
+    });
+
+    if (!res)
+    {
+        spdlog::error("App::upload_to_texture: immediate submit failed");
         return false;
     }
 
