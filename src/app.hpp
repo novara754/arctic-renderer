@@ -1,10 +1,12 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <filesystem>
 
 #include <d3d12.h>
 
+#include <SDL3/SDL_events.h>
 #include <SDL3/SDL_video.h>
 
 #include "engine.hpp"
@@ -25,8 +27,17 @@ class App
         uint32_t width, height;
     } m_window_size{WINDOW_WIDTH, WINDOW_HEIGHT};
 
-    Engine m_engine;
+    std::chrono::high_resolution_clock::time_point m_last_frame_time;
+    float m_delta_time;
 
+    struct
+    {
+        bool w, a, s, d, space, ctrl, rmb;
+    } m_input{};
+    float m_camera_speed{10.0f};
+    float m_mouse_sensitivity{0.5f};
+
+    Engine m_engine;
     ForwardPass m_forward_pass;
 
     ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
@@ -60,6 +71,10 @@ class App
     void run();
 
   private:
+    void handle_event(SDL_Event &event);
+
+    void update();
+
     [[nodiscard]] bool load_scene(const std::filesystem::path &path, Scene &out_scene);
 
     [[nodiscard]] bool render_frame();

@@ -74,8 +74,15 @@
 void App::run()
 {
     spdlog::trace("App::run: entering loop");
+    m_last_frame_time = std::chrono::high_resolution_clock::now();
     while (true)
     {
+        std::chrono::high_resolution_clock::time_point now =
+            std::chrono::high_resolution_clock::now();
+        m_delta_time =
+            std::chrono::duration<float, std::milli>(now - m_last_frame_time).count() / 1000.0f;
+        m_last_frame_time = now;
+
         SDL_Event event;
         if (SDL_PollEvent(&event))
         {
@@ -92,8 +99,12 @@ void App::run()
                 };
             }
 
+            handle_event(event);
+
             ImGui_ImplSDL3_ProcessEvent(&event);
         }
+
+        update();
 
         if (!render_frame())
         {
@@ -112,6 +123,72 @@ void App::run()
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
+}
+
+void App::handle_event(SDL_Event &event)
+{
+    if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)
+    {
+        bool pressed = event.type == SDL_EVENT_KEY_DOWN;
+        switch (event.key.scancode)
+        {
+            case SDL_SCANCODE_W:
+                m_input.w = pressed;
+                break;
+            case SDL_SCANCODE_A:
+                m_input.a = pressed;
+                break;
+            case SDL_SCANCODE_S:
+                m_input.s = pressed;
+                break;
+            case SDL_SCANCODE_D:
+                m_input.d = pressed;
+                break;
+            case SDL_SCANCODE_SPACE:
+                m_input.space = pressed;
+                break;
+            case SDL_SCANCODE_LCTRL:
+                m_input.ctrl = pressed;
+                break;
+        }
+    }
+    else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP)
+    {
+        if (event.button.button == 3)
+        {
+            m_input.rmb = event.button.down;
+        }
+    }
+    else if (event.type == SDL_EVENT_MOUSE_MOTION && m_input.rmb)
+    {
+        m_scene.camera.rotation.y += event.motion.xrel * m_mouse_sensitivity;
+        m_scene.camera.rotation.x -= event.motion.yrel * m_mouse_sensitivity;
+    }
+}
+
+void App::update()
+{
+    using namespace DirectX;
+
+    float fwd_input = static_cast<float>(m_input.w) - static_cast<float>(m_input.s);
+    float right_input = static_cast<float>(m_input.d) - static_cast<float>(m_input.a);
+    float up_input = static_cast<float>(m_input.space) - static_cast<float>(m_input.ctrl);
+
+    XMFLOAT3 forward_ = m_scene.camera.forward();
+    XMVECTOR forward = XMLoadFloat3(&forward_);
+
+    XMFLOAT3 up_ = m_scene.camera.up();
+    XMVECTOR up = XMLoadFloat3(&up_);
+
+    XMVECTOR right = XMVector3Cross(forward, up);
+
+    XMVECTOR eye = XMLoadFloat3(&m_scene.camera.eye);
+
+    eye = XMVectorAdd(eye, XMVectorScale(forward, m_camera_speed * m_delta_time * fwd_input));
+    eye = XMVectorAdd(eye, XMVectorScale(right, m_camera_speed * m_delta_time * right_input));
+    eye = XMVectorAdd(eye, XMVectorScale(up, m_camera_speed * m_delta_time * up_input));
+
+    XMStoreFloat3(&m_scene.camera.eye, eye);
 }
 
 bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
@@ -341,7 +418,12 @@ void App::build_ui()
 {
     ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
+        ImGui::SeparatorText("Stats");
+        ImGui::Text("Frame Time: %.2f ms", m_delta_time * 1000.0f);
+
         ImGui::SeparatorText("Camera");
+        ImGui::SliderFloat("Speed", &m_camera_speed, 0.1f, 5000.0f);
+        ImGui::SliderFloat("Sensitivity", &m_mouse_sensitivity, 0.01f, 2.0f);
         ImGui::DragFloat3("Position", &m_scene.camera.eye.x, 0.1f);
         ImGui::DragFloat2("Rotation", &m_scene.camera.rotation.x, 0.1f, -360.0f, 360.0f);
         ImGui::DragFloat2("Z Near/Far", m_scene.camera.z_near_far.data(), 0.01f, 0.001f, 10000.0f);

@@ -16,6 +16,13 @@ struct Camera
     float fov_y;
     std::array<float, 2> z_near_far;
 
+    [[nodiscard]] DirectX::XMFLOAT3 forward() const;
+
+    [[nodiscard]] DirectX::XMFLOAT3 up() const
+    {
+        return DirectX::XMFLOAT3(0.0f, 1.0f, 0.0f);
+    }
+
     [[nodiscard]] DirectX::XMMATRIX view_matrix() const;
 
     [[nodiscard]] DirectX::XMMATRIX proj_matrix() const;
