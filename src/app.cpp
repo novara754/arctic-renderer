@@ -555,8 +555,10 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
 {
     Assimp::Importer importer;
 
-    const aiScene *scene =
-        importer.ReadFile(path.string(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+    const aiScene *scene = importer.ReadFile(
+        path.string(),
+        aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs
+    );
     if (scene == nullptr)
     {
         spdlog::error("App::load_scene: failed to load file");
