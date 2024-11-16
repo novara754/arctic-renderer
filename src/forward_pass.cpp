@@ -6,6 +6,8 @@
 
 #include "dxerr.hpp"
 
+#define CONSTANTS_SIZE(ty) ((sizeof(ty) + 3) / 4)
+
 bool ForwardPass::init(uint32_t width, uint32_t height)
 {
     m_output_size.width = width;
@@ -90,7 +92,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height)
     ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
     std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
-    root_parameters[0].InitAsConstants(2 * 4 * 4, 0);
+    root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
     root_parameters[1].InitAsDescriptorTable(
         static_cast<UINT>(ranges.size()),
         ranges.data(),
@@ -223,15 +225,13 @@ void ForwardPass::run(
     const Scene &scene
 )
 {
-    struct
-    {
-        DirectX::XMMATRIX view;
-        DirectX::XMMATRIX proj;
-    } camera_matrices{
+    ConstantBuffer constants{
         .view = scene.camera.view_matrix(),
         .proj = scene.camera.proj_matrix(),
+        .sun_dir = scene.sun.direction(),
+        .ambient = scene.ambient,
+        .sun_color = scene.sun.color,
     };
-    assert(sizeof(camera_matrices) == 2 * 4 * 4 * 4);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(m_dsv_heap->GetCPUDescriptorHandleForHeapStart());
 
@@ -243,7 +243,7 @@ void ForwardPass::run(
     std::array heaps{m_srv_heap.Get()};
     cmd_list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
     cmd_list->SetPipelineState(m_pipeline.Get());
-    cmd_list->SetGraphicsRoot32BitConstants(0, 2 * 4 * 4, &camera_matrices, 0);
+    cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
 
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

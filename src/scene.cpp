@@ -28,3 +28,16 @@ DirectX::XMMATRIX Camera::proj_matrix() const
         this->z_near_far[1]
     );
 }
+
+DirectX::XMFLOAT3 DirectionalLight::direction() const
+{
+    using namespace DirectX;
+
+    return XMFLOAT3(
+        XMScalarCos(XMConvertToRadians(this->rotation.x)) *
+            XMScalarCos(XMConvertToRadians(this->rotation.y)),
+        XMScalarSin(XMConvertToRadians(this->rotation.x)),
+        XMScalarCos(XMConvertToRadians(this->rotation.x)) *
+            XMScalarSin(XMConvertToRadians(this->rotation.y))
+    );
+}

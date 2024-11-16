@@ -40,6 +40,11 @@ class App
             .fov_y = 45.0f,
             .z_near_far = {0.1f, 1000.0f},
         },
+        .ambient = 0.1f,
+        .sun{
+            .rotation = {-50.0f, 0.0f},
+            .color = {1.0f, 1.0f, 1.0f},
+        },
         .meshes{},
         .objects{},
     };

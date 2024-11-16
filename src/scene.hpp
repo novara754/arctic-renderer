@@ -46,9 +46,19 @@ struct Material
     ComPtr<ID3D12Resource> diffuse;
 };
 
+struct DirectionalLight
+{
+    DirectX::XMFLOAT2 rotation;
+    DirectX::XMFLOAT3 color;
+
+    [[nodiscard]] DirectX::XMFLOAT3 direction() const;
+};
+
 struct Scene
 {
     Camera camera;
+    float ambient;
+    DirectionalLight sun;
     std::vector<Mesh> meshes;
     std::vector<Material> materials;
     std::vector<size_t> objects;

@@ -8,6 +8,20 @@
 
 class ForwardPass
 {
+    struct ConstantBuffer
+    {
+        DirectX::XMMATRIX view;
+        DirectX::XMMATRIX proj;
+        DirectX::XMFLOAT3 sun_dir;
+        float ambient;
+        DirectX::XMFLOAT3 sun_color;
+    };
+
+    static_assert(
+        sizeof(ConstantBuffer) % 4 == 0,
+        "Size of ForwardPass::ConstantBuffer is not a multiple of 4"
+    );
+
     Engine *m_engine;
 
     struct

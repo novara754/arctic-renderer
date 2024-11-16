@@ -342,9 +342,14 @@ void App::build_ui()
     ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     {
         ImGui::SeparatorText("Camera");
-        ImGui::DragFloat3("Eye", &m_scene.camera.eye.x, 0.1f);
-        ImGui::DragFloat2("Rot", &m_scene.camera.rotation.x, 0.1f, -360.0f, 360.0f);
+        ImGui::DragFloat3("Position", &m_scene.camera.eye.x, 0.1f);
+        ImGui::DragFloat2("Rotation", &m_scene.camera.rotation.x, 0.1f, -360.0f, 360.0f);
         ImGui::DragFloat2("Z Near/Far", m_scene.camera.z_near_far.data(), 0.01f, 0.001f, 10000.0f);
+
+        ImGui::SeparatorText("Light");
+        ImGui::SliderFloat("Ambient", &m_scene.ambient, 0.0f, 1.0f);
+        ImGui::DragFloat2("Sun Rotation", &m_scene.sun.rotation.x, 0.1f, -360.0f, 360.0f);
+        ImGui::ColorPicker3("Sun Color", &m_scene.sun.color.x);
     }
     ImGui::End();
 }
