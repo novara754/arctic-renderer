@@ -31,6 +31,13 @@
         return false;
     }
 
+    if (!m_post_process_pass
+             .init(m_window_size.width, m_window_size.height, m_forward_pass.color_target()))
+    {
+        spdlog::error("App::init: failed to initialize post process pass");
+        return false;
+    }
+
     // ------------
     // Initialize ImGui
     // -------
@@ -397,13 +404,60 @@ bool App::render_frame()
     build_ui();
 
     bool res = m_engine.render_frame([&](ID3D12GraphicsCommandList *cmd_list,
-                                         CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle) {
-        m_forward_pass.run(cmd_list, rtv_handle, m_scene);
+                                         ID3D12Resource *target,
+                                         D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle) {
+        m_forward_pass.run(cmd_list, m_scene);
+
+        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_forward_pass.color_target(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
+
+        m_post_process_pass.run(cmd_list, m_gamma);
+
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_forward_pass.color_target(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_COPY_SOURCE
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
+
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            target,
+            D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATE_COPY_DEST
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
+
+        cmd_list->CopyResource(target, m_forward_pass.color_target());
+
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            target,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_forward_pass.color_target(),
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
 
         ImGui::Render();
         std::array descriptor_heaps{m_imgui_cbv_srv_heap.Get()};
         cmd_list->SetDescriptorHeaps(1, descriptor_heaps.data());
+        cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
         ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_list);
+
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            target,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_PRESENT
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
     });
     if (!res)
     {
@@ -432,6 +486,9 @@ void App::build_ui()
         ImGui::SliderFloat("Ambient", &m_scene.ambient, 0.0f, 1.0f);
         ImGui::DragFloat2("Sun Rotation", &m_scene.sun.rotation.x, 0.1f, -360.0f, 360.0f);
         ImGui::ColorPicker3("Sun Color", &m_scene.sun.color.x);
+
+        ImGui::SeparatorText("Post Processing");
+        ImGui::DragFloat("Gamma", &m_gamma, 0.01f, 0.1f, 5.0f);
     }
     ImGui::End();
 }
@@ -466,6 +523,12 @@ bool App::handle_resize()
     if (!m_forward_pass.resize(m_window_size.width, m_window_size.height))
     {
         spdlog::error("App::handle_resize: failed to resize forward pass resources");
+        return false;
+    }
+
+    if (!m_post_process_pass.resize(m_window_size.width, m_window_size.height))
+    {
+        spdlog::error("App::handle_resize: failed to resize post process pass resources");
         return false;
     }
 

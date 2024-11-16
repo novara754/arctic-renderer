@@ -59,7 +59,8 @@ class Engine
     [[nodiscard]] bool resize(uint32_t new_width, int32_t new_height);
 
     [[nodiscard]] bool
-    render_frame(std::function<void(ID3D12GraphicsCommandList *, CD3DX12_CPU_DESCRIPTOR_HANDLE)>
+    render_frame(std::function<
+                 void(ID3D12GraphicsCommandList *, ID3D12Resource *, D3D12_CPU_DESCRIPTOR_HANDLE)>
                      &&render_func);
 
     [[nodiscard]] ID3D12Device2 *device()
@@ -89,7 +90,7 @@ class Engine
 
     [[nodiscard]] bool create_texture(
         uint64_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_STATES initial_state,
-        ComPtr<ID3D12Resource> &out_texture
+        ComPtr<ID3D12Resource> &out_texture, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
     );
 
     [[nodiscard]] bool

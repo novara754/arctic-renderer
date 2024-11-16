@@ -13,6 +13,37 @@ bool ForwardPass::init(uint32_t width, uint32_t height)
     m_output_size.width = width;
     m_output_size.height = height;
 
+    if (!m_engine->create_descriptor_heap(
+            D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            1,
+            D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            m_rtv_heap
+        ))
+    {
+        spdlog::error("ForwardPass::init: failed to create rtv descriptor heap");
+        return false;
+    }
+    spdlog::trace("ForwardPass::init: created rtv descriptor heap");
+
+    if (!m_engine->create_texture(
+            width,
+            height,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            m_color_target,
+            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+        ))
+    {
+        spdlog::error("ForwardPass::init: failed to create color target texture");
+        return false;
+    }
+
+    m_engine->device()->CreateRenderTargetView(
+        m_color_target.Get(),
+        nullptr,
+        m_rtv_heap->GetCPUDescriptorHandleForHeapStart()
+    );
+
     // ------------
     // Read and compile shaders
     // -------
@@ -220,10 +251,7 @@ bool ForwardPass::resize(uint32_t new_width, uint32_t new_height)
     return true;
 }
 
-void ForwardPass::run(
-    ID3D12GraphicsCommandList *cmd_list, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle,
-    const Scene &scene
-)
+void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
 {
     ConstantBuffer constants{
         .view = scene.camera.view_matrix(),
@@ -233,7 +261,8 @@ void ForwardPass::run(
         .sun_color = scene.sun.color,
     };
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE dsv_handle(m_dsv_heap->GetCPUDescriptorHandleForHeapStart());
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = m_rtv_heap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_heap->GetCPUDescriptorHandleForHeapStart();
 
     std::array<float, 4> clear_color{0.0f, 0.0f, 0.0f, 1.0f};
     cmd_list->ClearRenderTargetView(rtv_handle, clear_color.data(), 0, nullptr);

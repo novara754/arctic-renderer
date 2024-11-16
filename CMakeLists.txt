@@ -74,9 +74,10 @@ FetchContent_MakeAvailable(stb)
 add_executable(arctic
         src/main.cpp
         src/app.cpp
+        src/scene.cpp
         src/engine.cpp
         src/forward_pass.cpp
-        src/scene.cpp
+        src/post_process_pass.cpp
 
         src/stb_image_impl.cpp
 

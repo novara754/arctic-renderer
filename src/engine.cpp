@@ -356,8 +356,7 @@ bool Engine::resize(uint32_t new_width, int32_t new_height)
 }
 
 bool Engine::render_frame(
-    std::function<
-        void(ID3D12GraphicsCommandList *cmd_list, CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle)>
+    std::function<void(ID3D12GraphicsCommandList *, ID3D12Resource *, D3D12_CPU_DESCRIPTOR_HANDLE)>
         &&render_func
 )
 {
@@ -380,49 +379,27 @@ bool Engine::render_frame(
         "Engine::render_frame: failed to reset command list"
     );
 
-    {
-        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            backbuffer.Get(),
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-        m_command_list->ResourceBarrier(1, &barrier);
-    }
-
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(
         m_rtv_heap->GetCPUDescriptorHandleForHeapStart(),
         m_current_backbuffer_index,
         m_rtv_descriptor_size
     );
+    render_func(m_command_list.Get(), backbuffer.Get(), rtv_handle);
 
-    render_func(m_command_list.Get(), rtv_handle);
+    DXERR(m_command_list->Close(), "Engine::render_frame: failed to close command list");
+    std::array<ID3D12CommandList *const, 1> lists{m_command_list.Get()};
+    m_command_queue->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
 
-    {
-
-        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            backbuffer.Get(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PRESENT
-        );
-        m_command_list->ResourceBarrier(1, &barrier);
-
-        DXERR(m_command_list->Close(), "Engine::render_frame: failed to close command list");
-        std::array<ID3D12CommandList *const, 1> lists{m_command_list.Get()};
-        m_command_queue->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
-    }
-
-    {
-        UINT flags = m_allow_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
-        m_swapchain->Present(0, flags);
-        DXERR(
-            signal_fence(
-                m_fence.Get(),
-                m_fence_value,
-                m_frame_fence_values[m_current_backbuffer_index]
-            ),
-            "Engine::render_frame: failed to signal fence"
-        );
-    }
+    UINT present_flags = m_allow_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
+    m_swapchain->Present(0, present_flags);
+    DXERR(
+        signal_fence(
+            m_fence.Get(),
+            m_fence_value,
+            m_frame_fence_values[m_current_backbuffer_index]
+        ),
+        "Engine::render_frame: failed to signal fence"
+    );
 
     return true;
 }
@@ -528,11 +505,13 @@ bool Engine::create_buffer(
 
 bool Engine::create_texture(
     uint64_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_STATES initial_state,
-    ComPtr<ID3D12Resource> &out_texture
+    ComPtr<ID3D12Resource> &out_texture, D3D12_RESOURCE_FLAGS flags
 )
 {
     CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
     CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height);
+    resource_desc.Flags = flags;
+    resource_desc.MipLevels = 1;
     DXERR(
         m_device->CreateCommittedResource(
             &heap_props,
@@ -644,12 +623,6 @@ bool Engine::upload_to_texture(
         return false;
     }
 
-    D3D12_SUBRESOURCE_DATA data{
-        .pData = src_data,
-        .RowPitch = static_cast<LONG_PTR>(width * channels),
-        .SlicePitch = static_cast<LONG_PTR>(width * height * channels),
-    };
-
     bool res = immediate_submit([&](ID3D12GraphicsCommandList *cmd_list) {
         CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             dst_texture,
@@ -658,6 +631,11 @@ bool Engine::upload_to_texture(
         );
         cmd_list->ResourceBarrier(1, &barrier);
 
+        D3D12_SUBRESOURCE_DATA data{
+            .pData = src_data,
+            .RowPitch = static_cast<LONG_PTR>(width * channels),
+            .SlicePitch = static_cast<LONG_PTR>(width * height * channels),
+        };
         UpdateSubresources(cmd_list, dst_texture, staging_buffer.Get(), 0, 0, 1, &data);
 
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(

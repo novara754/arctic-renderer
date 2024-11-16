@@ -11,6 +11,7 @@
 
 #include "engine.hpp"
 #include "forward_pass.hpp"
+#include "post_process_pass.hpp"
 #include "scene.hpp"
 
 class App
@@ -39,6 +40,7 @@ class App
 
     Engine m_engine;
     ForwardPass m_forward_pass;
+    PostProcessPass m_post_process_pass;
 
     ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
 
@@ -59,10 +61,12 @@ class App
         .meshes{},
         .objects{},
     };
+    float m_gamma{2.2f};
 
   public:
     explicit App(SDL_Window *window, const std::filesystem::path &scene_path)
-        : m_window(window), m_forward_pass(&m_engine), m_scene_path(scene_path)
+        : m_window(window), m_forward_pass(&m_engine), m_post_process_pass(&m_engine),
+          m_scene_path(scene_path)
     {
     }
 
