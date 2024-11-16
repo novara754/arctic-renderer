@@ -74,6 +74,9 @@ FetchContent_MakeAvailable(stb)
 add_executable(arctic
         src/main.cpp
         src/app.cpp
+        src/engine.cpp
+        src/forward_pass.cpp
+        src/scene.cpp
 
         src/stb_image_impl.cpp
 
@@ -89,7 +92,11 @@ add_executable(arctic
 
 target_compile_options(arctic PRIVATE /W4 /WX)
 
-target_compile_definitions(arctic PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_definitions(arctic PRIVATE
+        _CRT_SECURE_NO_WARNINGS
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+)
 
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR}/backends)
