@@ -78,6 +78,7 @@ add_executable(arctic
         src/engine.cpp
         src/forward_pass.cpp
         src/post_process_pass.cpp
+        src/shadow_map_pass.cpp
 
         src/stb_image_impl.cpp
 

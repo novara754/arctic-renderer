@@ -47,3 +47,23 @@ DirectX::XMFLOAT3 DirectionalLight::direction() const
             XMScalarSin(XMConvertToRadians(this->rotation.y))
     );
 }
+
+[[nodiscard]] DirectX::XMMATRIX DirectionalLight::view_matrix() const
+{
+    using namespace DirectX;
+
+    XMFLOAT3 forward = this->direction();
+    XMFLOAT3 up(0.0f, 1.0f, 0.0f);
+
+    return XMMatrixLookToRH(
+        XMLoadFloat3(&this->position),
+        XMLoadFloat3(&forward),
+        XMLoadFloat3(&up)
+    );
+}
+
+[[nodiscard]] DirectX::XMMATRIX DirectionalLight::proj_matrix() const
+{
+    using namespace DirectX;
+    return XMMatrixOrthographicRH(4000.0f, 4000.0f, 0.1f, 5000.0f);
+}

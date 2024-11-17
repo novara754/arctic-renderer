@@ -10,8 +10,9 @@ class ForwardPass
 {
     struct ConstantBuffer
     {
-        DirectX::XMMATRIX view;
-        DirectX::XMMATRIX proj;
+        DirectX::XMMATRIX proj_view;
+        DirectX::XMMATRIX light_proj_view;
+
         DirectX::XMFLOAT3 sun_dir;
         float ambient;
         DirectX::XMFLOAT3 sun_color;
@@ -58,7 +59,7 @@ class ForwardPass
         return m_color_target.Get();
     }
 
-    [[nodiscard]] bool init(uint32_t width, uint32_t height);
+    [[nodiscard]] bool init(uint32_t width, uint32_t height, ID3D12Resource *shadow_map);
 
     [[nodiscard]] bool resize(uint32_t new_width, uint32_t new_height);
 

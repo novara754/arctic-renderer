@@ -55,10 +55,15 @@ struct Material
 
 struct DirectionalLight
 {
+    DirectX::XMFLOAT3 position;
     DirectX::XMFLOAT2 rotation;
     DirectX::XMFLOAT3 color;
 
     [[nodiscard]] DirectX::XMFLOAT3 direction() const;
+
+    [[nodiscard]] DirectX::XMMATRIX view_matrix() const;
+
+    [[nodiscard]] DirectX::XMMATRIX proj_matrix() const;
 };
 
 struct Scene

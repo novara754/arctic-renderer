@@ -25,7 +25,14 @@
         return false;
     }
 
-    if (!m_forward_pass.init(m_window_size.width, m_window_size.height))
+    if (!m_shadow_map_pass.init())
+    {
+        spdlog::error("App::init: failed to initialize forward pass");
+        return false;
+    }
+
+    if (!m_forward_pass
+             .init(m_window_size.width, m_window_size.height, m_shadow_map_pass.shadow_map()))
     {
         spdlog::error("App::init: failed to initialize forward pass");
         return false;
@@ -406,9 +413,21 @@ bool App::render_frame()
     bool res = m_engine.render_frame([&](ID3D12GraphicsCommandList *cmd_list,
                                          ID3D12Resource *target,
                                          D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle) {
-        m_forward_pass.run(cmd_list, m_scene);
+        m_shadow_map_pass.run(cmd_list, m_scene);
 
         CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_shadow_map_pass.shadow_map(),
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+        );
+        m_forward_pass.run(cmd_list, m_scene);
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_shadow_map_pass.shadow_map(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE
+        );
+
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_forward_pass.color_target(),
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS
@@ -484,6 +503,7 @@ void App::build_ui()
 
         ImGui::SeparatorText("Light");
         ImGui::SliderFloat("Ambient", &m_scene.ambient, 0.0f, 1.0f);
+        ImGui::DragFloat3("Sun Position", &m_scene.sun.position.x);
         ImGui::DragFloat2("Sun Rotation", &m_scene.sun.rotation.x, 0.1f, -360.0f, 360.0f);
         ImGui::ColorPicker3("Sun Color", &m_scene.sun.color.x);
 

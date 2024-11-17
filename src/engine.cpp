@@ -81,6 +81,7 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
             std::array ids{
                 // warns about unoptimized clear color
                 D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+                D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
                 // triggered when using visual studio graphics debugging tools
                 D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
                 D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
@@ -535,6 +536,7 @@ bool Engine::create_depth_texture(
     CD3DX12_RESOURCE_DESC resource_desc =
         CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, width, height);
     resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    resource_desc.MipLevels = 1;
     CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
     DXERR(
         m_device->CreateCommittedResource(

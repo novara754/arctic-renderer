@@ -13,6 +13,7 @@
 #include "forward_pass.hpp"
 #include "post_process_pass.hpp"
 #include "scene.hpp"
+#include "shadow_map_pass.hpp"
 
 class App
 {
@@ -35,10 +36,11 @@ class App
     {
         bool w, a, s, d, space, ctrl, rmb;
     } m_input{};
-    float m_camera_speed{10.0f};
+    float m_camera_speed{1000.0f};
     float m_mouse_sensitivity{0.5f};
 
     Engine m_engine;
+    ShadowMapPass m_shadow_map_pass;
     ForwardPass m_forward_pass;
     PostProcessPass m_post_process_pass;
 
@@ -47,15 +49,16 @@ class App
     std::filesystem::path m_scene_path;
     Scene m_scene{
         .camera{
-            .eye = {-8.0f, 5.0f, 0.0f},
-            .rotation = {-20.0f, 0.0f},
+            .eye = {0.0f, 500.0f, 0.0f},
+            .rotation = {0.0f, 0.0f},
             .aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT),
             .fov_y = 45.0f,
-            .z_near_far = {0.1f, 1000.0f},
+            .z_near_far = {0.1f, 10000.0f},
         },
         .ambient = 0.1f,
         .sun{
-            .rotation = {-50.0f, 0.0f},
+            .position = {-1150.0f, 4000.0f, -310.0f},
+            .rotation = {-70.0f, 12.0f},
             .color = {1.0f, 1.0f, 1.0f},
         },
         .meshes{},
@@ -65,8 +68,8 @@ class App
 
   public:
     explicit App(SDL_Window *window, const std::filesystem::path &scene_path)
-        : m_window(window), m_forward_pass(&m_engine), m_post_process_pass(&m_engine),
-          m_scene_path(scene_path)
+        : m_window(window), m_shadow_map_pass(&m_engine), m_forward_pass(&m_engine),
+          m_post_process_pass(&m_engine), m_scene_path(scene_path)
     {
     }
 

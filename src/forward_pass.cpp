@@ -8,7 +8,7 @@
 
 #define CONSTANTS_SIZE(ty) ((sizeof(ty) + 3) / 4)
 
-bool ForwardPass::init(uint32_t width, uint32_t height)
+bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_map)
 {
     m_output_size.width = width;
     m_output_size.height = height;
@@ -111,6 +111,17 @@ bool ForwardPass::init(uint32_t width, uint32_t height)
         m_srv_descriptor_size = m_engine->device()->GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
         );
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC shadow_map_srv_desc{};
+        shadow_map_srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        shadow_map_srv_desc.Format = DXGI_FORMAT_R32_FLOAT;
+        shadow_map_srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        shadow_map_srv_desc.Texture2D.MipLevels = 1;
+        m_engine->device()->CreateShaderResourceView(
+            shadow_map,
+            &shadow_map_srv_desc,
+            m_srv_heap->GetCPUDescriptorHandleForHeapStart()
+        );
     }
 
     // ------------
@@ -119,16 +130,16 @@ bool ForwardPass::init(uint32_t width, uint32_t height)
     ComPtr<ID3DBlob> root_signature;
     ComPtr<ID3DBlob> error;
 
-    std::array<CD3DX12_DESCRIPTOR_RANGE, 1> ranges{};
-    ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    CD3DX12_DESCRIPTOR_RANGE shadow_map_range;
+    shadow_map_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
-    std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
+    CD3DX12_DESCRIPTOR_RANGE material_range;
+    material_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 1);
+
+    std::array<CD3DX12_ROOT_PARAMETER, 3> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
-    root_parameters[1].InitAsDescriptorTable(
-        static_cast<UINT>(ranges.size()),
-        ranges.data(),
-        D3D12_SHADER_VISIBILITY_PIXEL
-    );
+    root_parameters[1].InitAsDescriptorTable(1, &shadow_map_range);
+    root_parameters[2].InitAsDescriptorTable(1, &material_range);
 
     D3D12_STATIC_SAMPLER_DESC sampler{};
     sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -153,15 +164,19 @@ bool ForwardPass::init(uint32_t width, uint32_t height)
         &sampler,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
     );
-    DXERR(
-        D3D12SerializeRootSignature(
+    if (FAILED(D3D12SerializeRootSignature(
             &root_signature_desc,
             D3D_ROOT_SIGNATURE_VERSION_1,
             &root_signature,
             &error
-        ),
-        "ForwardPass::init: failed to serialize root signature"
-    );
+        )))
+    {
+        spdlog::error(
+            "ForwardPass::init: failed to serialize root signature: {}",
+            static_cast<char *>(error->GetBufferPointer())
+        );
+        return false;
+    }
     DXERR(
         m_engine->device()->CreateRootSignature(
             0,
@@ -254,8 +269,14 @@ bool ForwardPass::resize(uint32_t new_width, uint32_t new_height)
 void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
 {
     ConstantBuffer constants{
-        .view = scene.camera.view_matrix(),
-        .proj = scene.camera.proj_matrix(),
+        .proj_view = DirectX::XMMatrixTranspose(DirectX::XMMatrixMultiply(
+            DirectX::XMMatrixTranspose(scene.camera.proj_matrix()),
+            DirectX::XMMatrixTranspose(scene.camera.view_matrix())
+        )),
+        .light_proj_view = DirectX::XMMatrixTranspose(DirectX::XMMatrixMultiply(
+            DirectX::XMMatrixTranspose(scene.sun.proj_matrix()),
+            DirectX::XMMatrixTranspose(scene.sun.view_matrix())
+        )),
         .sun_dir = scene.sun.direction(),
         .ambient = scene.ambient,
         .sun_color = scene.sun.color,
@@ -263,6 +284,8 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = m_rtv_heap->GetCPUDescriptorHandleForHeapStart();
     D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_heap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE shadow_map_srv_handle =
+        m_srv_heap->GetGPUDescriptorHandleForHeapStart();
 
     std::array<float, 4> clear_color{0.0f, 0.0f, 0.0f, 1.0f};
     cmd_list->ClearRenderTargetView(rtv_handle, clear_color.data(), 0, nullptr);
@@ -273,6 +296,7 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
     cmd_list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
     cmd_list->SetPipelineState(m_pipeline.Get());
     cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
+    cmd_list->SetGraphicsRootDescriptorTable(1, shadow_map_srv_handle);
 
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -299,12 +323,12 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
     {
         const Mesh &mesh = scene.meshes[mesh_idx];
 
-        CD3DX12_GPU_DESCRIPTOR_HANDLE srv_handle(
+        CD3DX12_GPU_DESCRIPTOR_HANDLE diffuse_srv_handle(
             m_srv_heap->GetGPUDescriptorHandleForHeapStart(),
             static_cast<INT>(mesh.material_idx),
             m_srv_descriptor_size
         );
-        cmd_list->SetGraphicsRootDescriptorTable(1, srv_handle);
+        cmd_list->SetGraphicsRootDescriptorTable(2, diffuse_srv_handle);
         cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
         cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
         cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
@@ -315,7 +339,7 @@ void ForwardPass::create_srv_tex2d(int32_t index, ID3D12Resource *resource, DXGI
 {
     CD3DX12_CPU_DESCRIPTOR_HANDLE srv_handle(
         m_srv_heap->GetCPUDescriptorHandleForHeapStart(),
-        index,
+        index + 1,
         m_srv_descriptor_size
     );
     D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
