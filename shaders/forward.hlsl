@@ -44,6 +44,11 @@ float calculate_shadow(float3 normal, float4 light_space_position)
 	proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 	proj_coords.y = 1.0 - proj_coords.y;
 
+	if (proj_coords.z > 1.0 || proj_coords.x < 0.0 || proj_coords.y < 0.0 || proj_coords.x > 1.0 || proj_coords.y > 1.0)
+	{
+		return 0.0;
+	}
+
 	float closest_depth = t_shadow_map.Sample(s_sampler, proj_coords.xy).r;
 	float current_depth = proj_coords.z;
 	float bias = max(0.05 * (1.0 - dot(normal, sun_dir)), 0.005);
