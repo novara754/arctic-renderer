@@ -124,6 +124,7 @@ bool ShadowMapPass::init()
     pipeline_desc.SampleMask = ~0u;
     pipeline_desc.RasterizerState = CD3DX12_RASTERIZER_DESC(CD3DX12_DEFAULT());
     pipeline_desc.RasterizerState.FrontCounterClockwise = TRUE;
+    pipeline_desc.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
     pipeline_desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(CD3DX12_DEFAULT());
     pipeline_desc.InputLayout = {vertex_layout.data(), static_cast<UINT>(vertex_layout.size())};
     pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
