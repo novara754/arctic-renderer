@@ -10,8 +10,8 @@ class ShadowMapPass
 {
     struct ConstantBuffer
     {
-        DirectX::XMMATRIX view;
-        DirectX::XMMATRIX proj;
+        glm::mat4 model;
+        glm::mat4 proj_view;
     };
 
     static constexpr uint32_t SIZE = 2000;

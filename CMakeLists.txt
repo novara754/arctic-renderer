@@ -71,6 +71,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
+FetchContent_Declare(
+        glm
+        SYSTEM
+        GIT_REPOSITORY "https://github.com/g-truc/glm"
+        GIT_TAG "1.0.1"
+)
+FetchContent_MakeAvailable(glm)
+
 add_executable(arctic
         src/main.cpp
         src/app.cpp
@@ -98,6 +106,8 @@ target_compile_definitions(arctic PRIVATE
         _CRT_SECURE_NO_WARNINGS
         NOMINMAX
         WIN32_LEAN_AND_MEAN
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+        GLM_FORCE_EXPLICIT_CTOR
 )
 
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR})
@@ -107,6 +117,7 @@ target_link_libraries(arctic PRIVATE DirectX-Headers)
 target_link_libraries(arctic PRIVATE spdlog::spdlog)
 target_link_libraries(arctic PRIVATE SDL3::SDL3-static)
 target_link_libraries(arctic PRIVATE assimp::assimp)
+target_link_libraries(arctic PRIVATE glm::glm)
 target_link_libraries(arctic PRIVATE d3d12.lib dxgi.lib dxguid.lib d3dcompiler.lib)
 
 add_custom_command(

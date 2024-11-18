@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <tuple>
 
 #include <spdlog/spdlog.h>
 
@@ -16,6 +17,8 @@
 #include "imgui_impl_sdl3.h"
 
 #include "stb_image.h"
+
+glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
 
 [[nodiscard]] bool App::init()
 {
@@ -182,27 +185,18 @@ void App::handle_event(SDL_Event &event)
 
 void App::update()
 {
-    using namespace DirectX;
-
     float fwd_input = static_cast<float>(m_input.w) - static_cast<float>(m_input.s);
     float right_input = static_cast<float>(m_input.d) - static_cast<float>(m_input.a);
     float up_input = static_cast<float>(m_input.space) - static_cast<float>(m_input.ctrl);
 
-    XMFLOAT3 forward_ = m_scene.camera.forward();
-    XMVECTOR forward = XMLoadFloat3(&forward_);
+    glm::vec3 forward = m_scene.camera.forward();
+    glm::vec3 up = m_scene.camera.up();
+    glm::vec3 right = glm::cross(forward, up);
 
-    XMFLOAT3 up_ = m_scene.camera.up();
-    XMVECTOR up = XMLoadFloat3(&up_);
-
-    XMVECTOR right = XMVector3Cross(forward, up);
-
-    XMVECTOR eye = XMLoadFloat3(&m_scene.camera.eye);
-
-    eye = XMVectorAdd(eye, XMVectorScale(forward, m_camera_speed * m_delta_time * fwd_input));
-    eye = XMVectorAdd(eye, XMVectorScale(right, m_camera_speed * m_delta_time * right_input));
-    eye = XMVectorAdd(eye, XMVectorScale(up, m_camera_speed * m_delta_time * up_input));
-
-    XMStoreFloat3(&m_scene.camera.eye, eye);
+    glm::vec3 &eye = m_scene.camera.eye;
+    eye += m_camera_speed * m_delta_time * fwd_input * forward;
+    eye += m_camera_speed * m_delta_time * up_input * up;
+    eye += m_camera_speed * m_delta_time * right_input * right;
 }
 
 bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
@@ -383,20 +377,29 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
         out_scene.meshes.emplace_back(mesh);
     }
 
-    std::vector nodes_to_process{scene->mRootNode};
+    std::vector nodes_to_process{
+        std::make_pair(scene->mRootNode, glm::mat4(1.0f)),
+    };
     while (!nodes_to_process.empty())
     {
-        const aiNode *node = nodes_to_process.back();
+        const aiNode *node = nodes_to_process.back().first;
+        glm::mat4 parent_trs = nodes_to_process.back().second;
         nodes_to_process.pop_back();
+
+        glm::mat4 this_trs = assimp_to_mat4(node->mTransformation);
+        glm::mat4 trs = parent_trs * this_trs;
 
         for (size_t i = 0; i < node->mNumChildren; ++i)
         {
-            nodes_to_process.emplace_back(node->mChildren[i]);
+            nodes_to_process.emplace_back(std::make_pair(node->mChildren[i], trs));
         }
 
         for (unsigned int i = 0; i < node->mNumMeshes; ++i)
         {
-            out_scene.objects.emplace_back(node->mMeshes[i]);
+            out_scene.objects.emplace_back(Object{
+                .trs = trs,
+                .mesh_idx = node->mMeshes[i],
+            });
         }
     }
 
@@ -556,4 +559,30 @@ bool App::handle_resize()
         static_cast<float>(m_window_size.width) / static_cast<float>(m_window_size.height);
 
     return true;
+}
+
+glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat)
+{
+    glm::mat4 out(
+        mat.a1,
+        mat.a2,
+        mat.a3,
+        mat.a4,
+
+        mat.b1,
+        mat.b2,
+        mat.b3,
+        mat.b4,
+
+        mat.c1,
+        mat.c2,
+        mat.c3,
+        mat.c4,
+
+        mat.d1,
+        mat.d2,
+        mat.d3,
+        mat.d4
+    );
+    return out;
 }

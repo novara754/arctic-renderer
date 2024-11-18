@@ -36,7 +36,7 @@ class App
     {
         bool w, a, s, d, space, ctrl, rmb;
     } m_input{};
-    float m_camera_speed{1000.0f};
+    float m_camera_speed{10.0f};
     float m_mouse_sensitivity{0.5f};
 
     Engine m_engine;
@@ -49,15 +49,17 @@ class App
     std::filesystem::path m_scene_path;
     Scene m_scene{
         .camera{
-            .eye = {0.0f, 500.0f, 0.0f},
-            .rotation = {0.0f, 0.0f},
+            // .eye = {0.0f, 5.0f, 0.0f},
+            // .rotation = {0.0f, 0.0f},
+            .eye = {-10.0f, 32.0f, -2.48f},
+            .rotation = {-70.0f, 12.0f},
             .aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT),
             .fov_y = 45.0f,
-            .z_near_far = {0.1f, 10000.0f},
+            .z_near_far = {0.1f, 1000.0f},
         },
         .ambient = 0.1f,
         .sun{
-            .position = {-1150.0f, 4000.0f, -310.0f},
+            .position = {-10.0f, 32.0f, -2.48f},
             .rotation = {-70.0f, 12.0f},
             .color = {1.0f, 1.0f, 1.0f},
         },

@@ -10,12 +10,15 @@ class ForwardPass
 {
     struct ConstantBuffer
     {
-        DirectX::XMMATRIX proj_view;
-        DirectX::XMMATRIX light_proj_view;
+        glm::mat4 model;
+        glm::mat4 proj_view;
+        glm::mat4 light_proj_view;
 
-        DirectX::XMFLOAT3 sun_dir;
+        glm::vec3 sun_dir;
         float ambient;
-        DirectX::XMFLOAT3 sun_color;
+        glm::vec3 sun_color;
+
+        uint32_t padding0{0};
     };
 
     static_assert(

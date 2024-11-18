@@ -143,8 +143,7 @@ bool ShadowMapPass::init()
 void ShadowMapPass::run(ID3D12GraphicsCommandList *cmd_list, Scene &scene)
 {
     ConstantBuffer constants{
-        .view = scene.sun.view_matrix(),
-        .proj = scene.sun.proj_matrix(),
+        .proj_view = scene.sun.proj_view_matrix(),
     };
 
     D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_heap->GetCPUDescriptorHandleForHeapStart();
@@ -153,7 +152,6 @@ void ShadowMapPass::run(ID3D12GraphicsCommandList *cmd_list, Scene &scene)
 
     cmd_list->SetGraphicsRootSignature(m_root_signature.Get());
     cmd_list->SetPipelineState(m_pipeline.Get());
-    cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
 
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -176,9 +174,12 @@ void ShadowMapPass::run(ID3D12GraphicsCommandList *cmd_list, Scene &scene)
     };
     cmd_list->RSSetScissorRects(1, &scissor);
 
-    for (size_t mesh_idx : scene.objects)
+    for (const Object &obj : scene.objects)
     {
-        const Mesh &mesh = scene.meshes[mesh_idx];
+        const Mesh &mesh = scene.meshes[obj.mesh_idx];
+        constants.model = obj.trs;
+
+        cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
         cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
         cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
         cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);

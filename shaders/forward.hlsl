@@ -1,5 +1,6 @@
 cbuffer Scene : register(b0)
 {
+	float4x4 model;
 	float4x4 proj_view;
 	float4x4 light_proj_view;
 	float3 sun_dir;
@@ -28,12 +29,14 @@ struct VSOut
 
 VSOut vs_main(uint id : SV_VERTEXID, VSIn vs_in)
 {
+	float4 world_pos = mul(model, float4(vs_in.position, 1.0));
+
 	VSOut vs_out;
 
-	vs_out.clip_position = mul(proj_view, float4(vs_in.position, 1.0));
+	vs_out.clip_position = mul(proj_view, world_pos);
 	vs_out.tex_coords = vs_in.tex_coords;
 	vs_out.normal = vs_in.normal;
-	vs_out.light_space_position = mul(light_proj_view, float4(vs_in.position, 1.0));
+	vs_out.light_space_position = mul(light_proj_view, world_pos);
 
 	return vs_out;
 }

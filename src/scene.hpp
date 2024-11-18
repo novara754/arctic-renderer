@@ -3,36 +3,37 @@
 #include <array>
 #include <vector>
 
-#include <DirectXMath.h>
 #include <d3d12.h>
+
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "comptr.hpp"
 
 struct Camera
 {
-    DirectX::XMFLOAT3 eye;
-    DirectX::XMFLOAT2 rotation;
+    glm::vec3 eye;
+    glm::vec2 rotation;
     float aspect;
     float fov_y;
     std::array<float, 2> z_near_far;
 
-    [[nodiscard]] DirectX::XMFLOAT3 forward() const;
+    [[nodiscard]] glm::vec3 forward() const;
 
-    [[nodiscard]] DirectX::XMFLOAT3 up() const
+    [[nodiscard]] glm::vec3 up() const
     {
-        return DirectX::XMFLOAT3(0.0f, 1.0f, 0.0f);
+        return glm::vec3(0.0f, 1.0f, 0.0f);
     }
 
-    [[nodiscard]] DirectX::XMMATRIX view_matrix() const;
-
-    [[nodiscard]] DirectX::XMMATRIX proj_matrix() const;
+    [[nodiscard]] glm::mat4 proj_view_matrix() const;
 };
 
 struct Vertex
 {
-    DirectX::XMFLOAT3 position;
-    DirectX::XMFLOAT3 normal;
-    DirectX::XMFLOAT2 tex_coords;
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec2 tex_coords;
 };
 
 struct Mesh
@@ -53,17 +54,21 @@ struct Material
     ComPtr<ID3D12Resource> diffuse;
 };
 
+struct Object
+{
+    glm::mat4 trs;
+    size_t mesh_idx;
+};
+
 struct DirectionalLight
 {
-    DirectX::XMFLOAT3 position;
-    DirectX::XMFLOAT2 rotation;
-    DirectX::XMFLOAT3 color;
+    glm::vec3 position;
+    glm::vec2 rotation;
+    glm::vec3 color;
 
-    [[nodiscard]] DirectX::XMFLOAT3 direction() const;
+    [[nodiscard]] glm::vec3 direction() const;
 
-    [[nodiscard]] DirectX::XMMATRIX view_matrix() const;
-
-    [[nodiscard]] DirectX::XMMATRIX proj_matrix() const;
+    [[nodiscard]] glm::mat4 proj_view_matrix() const;
 };
 
 struct Scene
@@ -73,5 +78,5 @@ struct Scene
     DirectionalLight sun;
     std::vector<Mesh> meshes;
     std::vector<Material> materials;
-    std::vector<size_t> objects;
+    std::vector<Object> objects;
 };

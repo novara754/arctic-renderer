@@ -269,14 +269,8 @@ bool ForwardPass::resize(uint32_t new_width, uint32_t new_height)
 void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
 {
     ConstantBuffer constants{
-        .proj_view = DirectX::XMMatrixTranspose(DirectX::XMMatrixMultiply(
-            DirectX::XMMatrixTranspose(scene.camera.proj_matrix()),
-            DirectX::XMMatrixTranspose(scene.camera.view_matrix())
-        )),
-        .light_proj_view = DirectX::XMMatrixTranspose(DirectX::XMMatrixMultiply(
-            DirectX::XMMatrixTranspose(scene.sun.proj_matrix()),
-            DirectX::XMMatrixTranspose(scene.sun.view_matrix())
-        )),
+        .proj_view = scene.camera.proj_view_matrix(),
+        .light_proj_view = scene.sun.proj_view_matrix(),
         .sun_dir = scene.sun.direction(),
         .ambient = scene.ambient,
         .sun_color = scene.sun.color,
@@ -295,7 +289,6 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
     std::array heaps{m_srv_heap.Get()};
     cmd_list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
     cmd_list->SetPipelineState(m_pipeline.Get());
-    cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
     cmd_list->SetGraphicsRootDescriptorTable(1, shadow_map_srv_handle);
 
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -319,15 +312,17 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
     };
     cmd_list->RSSetScissorRects(1, &scissor);
 
-    for (size_t mesh_idx : scene.objects)
+    for (const Object &obj : scene.objects)
     {
-        const Mesh &mesh = scene.meshes[mesh_idx];
+        const Mesh &mesh = scene.meshes[obj.mesh_idx];
+        constants.model = obj.trs;
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE diffuse_srv_handle(
             m_srv_heap->GetGPUDescriptorHandleForHeapStart(),
             static_cast<INT>(mesh.material_idx),
             m_srv_descriptor_size
         );
+        cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
         cmd_list->SetGraphicsRootDescriptorTable(2, diffuse_srv_handle);
         cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
         cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
