@@ -48,12 +48,12 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     // Read and compile shaders
     // -------
     ComPtr<ID3DBlob> vs_code, ps_code;
-    if (!compile_shader(L"../shaders/forward.hlsl", "vs_main", "vs_5_0", &vs_code))
+    if (!compile_shader(L"./shaders/forward.hlsl", "vs_main", "vs_5_0", &vs_code))
     {
         spdlog::error("ForwardPass::init: failed to compile vertex shader");
         return false;
     }
-    if (!compile_shader(L"../shaders/forward.hlsl", "ps_main", "ps_5_0", &ps_code))
+    if (!compile_shader(L"./shaders/forward.hlsl", "ps_main", "ps_5_0", &ps_code))
     {
         spdlog::error("ForwardPass::init: failed to compile pixel shader");
         return false;

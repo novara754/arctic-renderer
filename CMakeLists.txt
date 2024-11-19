@@ -119,13 +119,3 @@ target_link_libraries(arctic PRIVATE SDL3::SDL3-static)
 target_link_libraries(arctic PRIVATE assimp::assimp)
 target_link_libraries(arctic PRIVATE glm::glm)
 target_link_libraries(arctic PRIVATE d3d12.lib dxgi.lib dxguid.lib d3dcompiler.lib)
-
-add_custom_command(
-        TARGET arctic POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_LIST_DIR}/shaders" "${CMAKE_CURRENT_BINARY_DIR}/shaders"
-)
-
-add_custom_command(
-        TARGET arctic POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_LIST_DIR}/assets" "${CMAKE_CURRENT_BINARY_DIR}/assets"
-)

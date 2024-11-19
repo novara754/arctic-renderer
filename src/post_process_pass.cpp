@@ -57,7 +57,7 @@ bool PostProcessPass::init(
         ->CreateUnorderedAccessView(m_output_texture.Get(), nullptr, &uav_desc, uav_handle);
 
     ComPtr<ID3DBlob> cs_code;
-    if (!compile_shader(L"../shaders/post_process.hlsl", "main", "cs_5_0", &cs_code))
+    if (!compile_shader(L"./shaders/post_process.hlsl", "main", "cs_5_0", &cs_code))
     {
         spdlog::error("PostProcessPass::init: failed to compile shader");
         return false;

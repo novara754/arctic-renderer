@@ -242,7 +242,7 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
                 "App::load_scene: material #{} missing diffuse texture, using fallback",
                 mat_idx
             );
-            diffuse_path = "../assets/white.png";
+            diffuse_path = "./assets/white.png";
         }
 
         int width, height, channels = 4;

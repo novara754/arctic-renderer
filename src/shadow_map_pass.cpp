@@ -13,7 +13,7 @@
 bool ShadowMapPass::init()
 {
     ComPtr<ID3DBlob> vs_code;
-    if (!compile_shader(L"../shaders/depth.hlsl", "main", "vs_5_0", &vs_code))
+    if (!compile_shader(L"./shaders/depth.hlsl", "main", "vs_5_0", &vs_code))
     {
         spdlog::error("ShadowMapPass::init: failed to compile depth shader");
         return false;
