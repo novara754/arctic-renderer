@@ -11,6 +11,25 @@ cbuffer Settings : register(b0)
 
 RWTexture2D<float4> tex[2] : register(u0);
 
+static float3x3 ACES_INPUT_MAT = float3x3(
+	0.59719, 0.35458, 0.04823,
+	0.07600, 0.90834, 0.01566,
+	0.02840, 0.13383, 0.837 //
+);
+
+static float3x3 ACES_OUTPUT_MAT = float3x3(
+	1.60475, -0.53108, -0.07367,
+	-0.10208, 1.10813, -0.00605,
+	-0.00327, -0.07276, 1.07 //
+);
+
+float3 rrt_and_odt_fit(float3 color)
+{
+	float3 a = color * (color + 0.0245786f) - 0.000090537f;
+	float3 b = color * (0.983729f * color + 0.4329510f) + 0.238081f;
+	return a / b;
+}
+
 float3 correct_gamma(float3 color)
 {
 	return pow(abs(color), 1.0 / gamma);
@@ -26,15 +45,14 @@ float3 tm_exposure(float3 color)
 	return float3(1.0, 1.0, 1.0) - exp(-color * exposure);
 }
 
-// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
+// Credits to: https://x.com/self_shadow
 float3 tm_aces(float3 color)
 {
-	float a = 2.51f;
-	float b = 0.03f;
-	float c = 2.43f;
-	float d = 0.59f;
-	float e = 0.14f;
-	return saturate((color * (a * color + b)) / (color * (c * color + d) + e));
+	color = mul(ACES_INPUT_MAT, color);
+	color = rrt_and_odt_fit(color);
+	color = mul(ACES_OUTPUT_MAT, color);
+	color = saturate(color);
+	return color;
 }
 
 [numthreads(16, 16, 1)] void main(uint3 thread_id : SV_DISPATCHTHREADID)
@@ -66,5 +84,6 @@ float3 tm_aces(float3 color)
 	}
 
 	color = correct_gamma(color);
+
 	tex[1][coord] = float4(color, 1.0);
 }
