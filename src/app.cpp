@@ -519,7 +519,11 @@ void App::build_ui()
         ImGui::SliderFloat("Ambient", &m_scene.ambient, 0.0f, 1.0f);
         ImGui::DragFloat3("Sun Position", &m_scene.sun.position.x);
         ImGui::DragFloat2("Sun Rotation", &m_scene.sun.rotation.x, 0.1f, -360.0f, 360.0f);
-        ImGui::ColorPicker3("Sun Color", &m_scene.sun.color.x, ImGuiColorEditFlags_HDR);
+        ImGui::ColorPicker3(
+            "Sun Color",
+            &m_scene.sun.color.x,
+            ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_InputHSV
+        );
 
         ImGui::SeparatorText("Post Processing");
         ImGui::DragFloat("Gamma", &m_gamma, 0.01f, 0.1f, 5.0f);
