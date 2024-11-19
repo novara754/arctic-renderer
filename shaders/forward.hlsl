@@ -52,10 +52,19 @@ float calculate_shadow(float3 normal, float4 light_space_position)
 		return 0.0;
 	}
 
-	float closest_depth = t_shadow_map.Sample(s_sampler, proj_coords.xy).r;
-	float current_depth = proj_coords.z;
 	float bias = max(0.05 * (1.0 - dot(normal, sun_dir)), 0.005);
-	float shadow = (current_depth - bias) > closest_depth ? 1.0 : 0.0;
+	float current_depth = proj_coords.z;
+	float shadow = 0.0;
+	for (int i = -2; i <= 2; ++i)
+	{
+		for (int j = -2; j <= 2; ++j)
+		{
+			float2 offset = float2(i * 0.0001, j * 0.0001);
+			float closest_depth = t_shadow_map.SampleLevel(s_sampler, proj_coords.xy + offset, 0).r;
+			shadow += (current_depth - bias) > closest_depth ? 1.0 : 0.0;
+		}
+	}
+	shadow /= 25.0;
 
 	return shadow;
 }

@@ -14,7 +14,7 @@ class ShadowMapPass
         glm::mat4 proj_view;
     };
 
-    static constexpr uint32_t SIZE = 2000;
+    static constexpr uint32_t SIZE = 4000;
 
     Engine *m_engine;
 
