@@ -49,10 +49,8 @@ class App
     std::filesystem::path m_scene_path;
     Scene m_scene{
         .camera{
-            // .eye = {0.0f, 5.0f, 0.0f},
-            // .rotation = {0.0f, 0.0f},
-            .eye = {-10.0f, 32.0f, -2.48f},
-            .rotation = {-70.0f, 12.0f},
+            .eye = {0.0f, 5.0f, 0.0f},
+            .rotation = {0.0f, 0.0f},
             .aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT),
             .fov_y = 45.0f,
             .z_near_far = {0.1f, 1000.0f},
@@ -61,12 +59,14 @@ class App
         .sun{
             .position = {-10.0f, 32.0f, -2.48f},
             .rotation = {-70.0f, 12.0f},
-            .color = {1.0f, 1.0f, 1.0f},
+            .color = {8.0f, 8.0f, 8.0f},
         },
         .meshes{},
         .objects{},
     };
     float m_gamma{2.2f};
+    int m_tm_method{0};
+    float m_exposure{1.0f};
 
   public:
     explicit App(SDL_Window *window, const std::filesystem::path &scene_path)

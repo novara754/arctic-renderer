@@ -28,7 +28,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     if (!m_engine->create_texture(
             width,
             height,
-            DXGI_FORMAT_R8G8B8A8_UNORM,
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             m_color_target,
             D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -233,7 +233,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     pipeline_desc.InputLayout = {vertex_layout.data(), static_cast<UINT>(vertex_layout.size())};
     pipeline_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pipeline_desc.NumRenderTargets = 1;
-    pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    pipeline_desc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
     pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
     pipeline_desc.SampleDesc = {1, 0};
     DXERR(

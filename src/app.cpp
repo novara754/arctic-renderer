@@ -41,8 +41,12 @@ glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
         return false;
     }
 
-    if (!m_post_process_pass
-             .init(m_window_size.width, m_window_size.height, m_forward_pass.color_target()))
+    if (!m_post_process_pass.init(
+            m_window_size.width,
+            m_window_size.height,
+            m_forward_pass.color_target(),
+            m_engine.swapchain_format()
+        ))
     {
         spdlog::error("App::init: failed to initialize post process pass");
         return false;
@@ -437,10 +441,17 @@ bool App::render_frame()
         );
         cmd_list->ResourceBarrier(1, &barrier);
 
-        m_post_process_pass.run(cmd_list, m_gamma);
+        m_post_process_pass.run(cmd_list, static_cast<uint32_t>(m_tm_method), m_gamma, m_exposure);
 
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_forward_pass.color_target(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+        cmd_list->ResourceBarrier(1, &barrier);
+
+        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_post_process_pass.output_texture(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_COPY_SOURCE
         );
@@ -453,7 +464,7 @@ bool App::render_frame()
         );
         cmd_list->ResourceBarrier(1, &barrier);
 
-        cmd_list->CopyResource(target, m_forward_pass.color_target());
+        cmd_list->CopyResource(target, m_post_process_pass.output_texture());
 
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             target,
@@ -462,9 +473,9 @@ bool App::render_frame()
         );
         cmd_list->ResourceBarrier(1, &barrier);
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_forward_pass.color_target(),
+            m_post_process_pass.output_texture(),
             D3D12_RESOURCE_STATE_COPY_SOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
         );
         cmd_list->ResourceBarrier(1, &barrier);
 
@@ -508,10 +519,15 @@ void App::build_ui()
         ImGui::SliderFloat("Ambient", &m_scene.ambient, 0.0f, 1.0f);
         ImGui::DragFloat3("Sun Position", &m_scene.sun.position.x);
         ImGui::DragFloat2("Sun Rotation", &m_scene.sun.rotation.x, 0.1f, -360.0f, 360.0f);
-        ImGui::ColorPicker3("Sun Color", &m_scene.sun.color.x);
+        ImGui::ColorPicker3("Sun Color", &m_scene.sun.color.x, ImGuiColorEditFlags_HDR);
 
         ImGui::SeparatorText("Post Processing");
         ImGui::DragFloat("Gamma", &m_gamma, 0.01f, 0.1f, 5.0f);
+        ImGui::Combo("Tone Mapping", &m_tm_method, "Reinhard\0Exposure\0ACES\0");
+        if (m_tm_method == 1)
+        {
+            ImGui::DragFloat("Exposure", &m_exposure, 0.1f, 0.0f, 10.0f);
+        }
     }
     ImGui::End();
 }
