@@ -522,7 +522,7 @@ void App::build_ui()
         ImGui::ColorPicker3(
             "Sun Color",
             &m_scene.sun.color.x,
-            ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_InputHSV
+            ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_PickerHueWheel
         );
 
         ImGui::SeparatorText("Post Processing");
