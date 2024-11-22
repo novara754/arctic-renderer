@@ -13,8 +13,6 @@
 #include <assimp/scene.h>
 
 #include "imgui.h"
-#include "imgui_impl_dx12.h"
-#include "imgui_impl_sdl3.h"
 
 #include "stb_image.h"
 
@@ -22,65 +20,10 @@ glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
 
 [[nodiscard]] bool App::init()
 {
-    if (!m_rhi.init(m_window, m_window_size.width, m_window_size.height))
+    if (!m_renderer.init())
     {
-        spdlog::error("App::init: failed to initialize engine");
+        spdlog::error("App::init: failed to initialize renderer");
         return false;
-    }
-
-    if (!m_shadow_map_pass.init())
-    {
-        spdlog::error("App::init: failed to initialize forward pass");
-        return false;
-    }
-
-    if (!m_forward_pass
-             .init(m_window_size.width, m_window_size.height, m_shadow_map_pass.shadow_map()))
-    {
-        spdlog::error("App::init: failed to initialize forward pass");
-        return false;
-    }
-
-    if (!m_post_process_pass.init(
-            m_window_size.width,
-            m_window_size.height,
-            m_forward_pass.color_target(),
-            m_rhi.swapchain_format()
-        ))
-    {
-        spdlog::error("App::init: failed to initialize post process pass");
-        return false;
-    }
-
-    // ------------
-    // Initialize ImGui
-    // -------
-    {
-        if (!m_rhi.create_descriptor_heap(
-                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                1,
-                D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                m_imgui_cbv_srv_heap
-            ))
-        {
-            spdlog::error("App::init: failed to create cbv srv heap for imgui");
-            return false;
-        }
-
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGui::GetIO().IniFilename = nullptr;
-
-        ImGui_ImplSDL3_InitForOther(m_window);
-        ImGui_ImplDX12_Init(
-            m_rhi.device(),
-            RHI::NUM_FRAMES,
-            m_rhi.swapchain_format(),
-            m_imgui_cbv_srv_heap.Get(),
-            m_imgui_cbv_srv_heap->GetCPUDescriptorHandleForHeapStart(),
-            m_imgui_cbv_srv_heap->GetGPUDescriptorHandleForHeapStart()
-        );
-        spdlog::trace("App::init: initialized imgui");
     }
 
     if (!load_scene(m_scene_path, m_scene))
@@ -136,7 +79,7 @@ void App::run()
     spdlog::trace("App::run: exited loop");
 
     spdlog::trace("App::run: flushing...");
-    if (!m_rhi.flush())
+    if (!m_renderer.flush())
     {
         spdlog::error("App::run: flush failed");
     }
@@ -225,7 +168,6 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
 
     for (size_t mat_idx = 0; mat_idx < scene->mNumMaterials; ++mat_idx)
     {
-        Material material;
 
         std::filesystem::path diffuse_path = path;
 
@@ -254,32 +196,12 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
             return false;
         }
 
-        bool res = m_rhi.create_texture(
-            width,
-            height,
-            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            material.diffuse
-        );
-        res &= m_rhi.upload_to_texture(
-            material.diffuse.Get(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            image_data,
-            width,
-            height,
-            channels
-        );
-        if (!res)
+        Material material;
+        if (!m_renderer.create_material(material, mat_idx, image_data, width, height))
         {
-            spdlog::error("App::load: failed to create diffuse texture for material #{}", mat_idx);
+            spdlog::error("App::load_scene: failed to create material #{}", mat_idx);
             return false;
         }
-
-        m_forward_pass.create_srv_tex2d(
-            static_cast<int32_t>(mat_idx),
-            material.diffuse.Get(),
-            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-        );
 
         out_scene.materials.emplace_back(material);
     }
@@ -324,59 +246,12 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
             }
         }
 
-        bool res = true;
-
         Mesh mesh;
-
-        uint64_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
-        res &= m_rhi.create_buffer(
-            vertex_buffer_size,
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-            D3D12_HEAP_TYPE_DEFAULT,
-            mesh.vertex_buffer
-        );
-
-        res &= m_rhi.upload_to_buffer(
-            mesh.vertex_buffer.Get(),
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-            vertices.data(),
-            vertex_buffer_size
-        );
-
-        uint64_t index_buffer_size = indices.size() * sizeof(uint32_t);
-        res &= m_rhi.create_buffer(
-            index_buffer_size,
-            D3D12_RESOURCE_STATE_INDEX_BUFFER,
-            D3D12_HEAP_TYPE_DEFAULT,
-            mesh.index_buffer
-        );
-
-        res &= m_rhi.upload_to_buffer(
-            mesh.index_buffer.Get(),
-            D3D12_RESOURCE_STATE_INDEX_BUFFER,
-            indices.data(),
-            index_buffer_size
-        );
-
-        if (!res)
+        if (!m_renderer.create_mesh(mesh, vertices, indices, ai_mesh->mMaterialIndex))
         {
-            spdlog::error(
-                "App::load_scene: failed to create vertex and/or index buffers for mesh #{}",
-                mesh_idx
-            );
+            spdlog::error("App::load_scene: failed to create mesh #{}", mesh_idx);
+            return false;
         }
-
-        mesh.vertex_buffer_view.BufferLocation = mesh.vertex_buffer->GetGPUVirtualAddress();
-        mesh.vertex_buffer_view.StrideInBytes = sizeof(Vertex);
-        mesh.vertex_buffer_view.SizeInBytes = static_cast<UINT>(vertex_buffer_size);
-
-        mesh.index_buffer_view.BufferLocation = mesh.index_buffer->GetGPUVirtualAddress();
-        mesh.index_buffer_view.Format = DXGI_FORMAT_R32_UINT;
-        mesh.index_buffer_view.SizeInBytes = static_cast<UINT>(index_buffer_size);
-
-        mesh.index_count = static_cast<uint32_t>(indices.size());
-
-        mesh.material_idx = ai_mesh->mMaterialIndex;
 
         out_scene.meshes.emplace_back(mesh);
     }
@@ -412,89 +287,9 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
 
 bool App::render_frame()
 {
-    ImGui_ImplSDL3_NewFrame();
-    ImGui_ImplDX12_NewFrame();
-    ImGui::NewFrame();
-    build_ui();
-
-    bool res = m_rhi.render_frame([&](ID3D12GraphicsCommandList *cmd_list,
-                                      ID3D12Resource *target,
-                                      D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle) {
-        m_shadow_map_pass.run(cmd_list, m_scene);
-
-        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_shadow_map_pass.shadow_map(),
-            D3D12_RESOURCE_STATE_DEPTH_WRITE,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-        );
-        m_forward_pass.run(cmd_list, m_scene);
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_shadow_map_pass.shadow_map(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE
-        );
-
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_forward_pass.color_target(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-        );
-        cmd_list->ResourceBarrier(1, &barrier);
-
-        m_post_process_pass.run(cmd_list, static_cast<uint32_t>(m_tm_method), m_gamma, m_exposure);
-
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_forward_pass.color_target(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-        cmd_list->ResourceBarrier(1, &barrier);
-
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_post_process_pass.output_texture(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_COPY_SOURCE
-        );
-        cmd_list->ResourceBarrier(1, &barrier);
-
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            target,
-            D3D12_RESOURCE_STATE_PRESENT,
-            D3D12_RESOURCE_STATE_COPY_DEST
-        );
-        cmd_list->ResourceBarrier(1, &barrier);
-
-        cmd_list->CopyResource(target, m_post_process_pass.output_texture());
-
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            target,
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-        cmd_list->ResourceBarrier(1, &barrier);
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_post_process_pass.output_texture(),
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-        );
-        cmd_list->ResourceBarrier(1, &barrier);
-
-        ImGui::Render();
-        std::array descriptor_heaps{m_imgui_cbv_srv_heap.Get()};
-        cmd_list->SetDescriptorHeaps(1, descriptor_heaps.data());
-        cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, nullptr);
-        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd_list);
-
-        barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            target,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_PRESENT
-        );
-        cmd_list->ResourceBarrier(1, &barrier);
-    });
-    if (!res)
+    if (!m_renderer.render_frame(m_scene, m_settings, [this] { build_ui(); }))
     {
-        spdlog::error("App::render_frame: failed to render frame");
+        spdlog::error("App::render_frame: failed");
         return false;
     }
 
@@ -526,11 +321,11 @@ void App::build_ui()
         );
 
         ImGui::SeparatorText("Post Processing");
-        ImGui::DragFloat("Gamma", &m_gamma, 0.01f, 0.1f, 5.0f);
-        ImGui::Combo("Tone Mapping", &m_tm_method, "Reinhard\0Exposure\0ACES\0");
-        if (m_tm_method == 1)
+        ImGui::DragFloat("Gamma", &m_settings.gamma, 0.01f, 0.1f, 5.0f);
+        ImGui::Combo("Tone Mapping", &m_settings.tm_method, "Reinhard\0Exposure\0ACES\0");
+        if (m_settings.tm_method == 1)
         {
-            ImGui::DragFloat("Exposure", &m_exposure, 0.1f, 0.0f, 10.0f);
+            ImGui::DragFloat("Exposure", &m_settings.exposure, 0.1f, 0.0f, 10.0f);
         }
     }
     ImGui::End();
@@ -538,45 +333,14 @@ void App::build_ui()
 
 bool App::handle_resize()
 {
-    int window_width, window_height;
-    assert(SDL_GetWindowSize(m_window, &window_width, &window_height));
-
-    uint32_t width = static_cast<uint32_t>(window_width);
-    uint32_t height = static_cast<uint32_t>(window_height);
-    if (width == m_window_size.width && height == m_window_size.height)
+    uint32_t new_width, new_height;
+    if (!m_renderer.resize(new_width, new_height))
     {
-        return true;
-    }
-
-    m_window_size.width = std::max(1u, width);
-    m_window_size.height = std::max(1u, height);
-
-    if (!m_rhi.flush())
-    {
-        spdlog::error("App::handle_resize: failed to flush");
+        spdlog::error("App::handle_resize: failed");
         return false;
     }
 
-    if (!m_rhi.resize(m_window_size.width, m_window_size.height))
-    {
-        spdlog::error("App::handle_resize: failed to resize engine resources");
-        return false;
-    }
-
-    if (!m_forward_pass.resize(m_window_size.width, m_window_size.height))
-    {
-        spdlog::error("App::handle_resize: failed to resize forward pass resources");
-        return false;
-    }
-
-    if (!m_post_process_pass.resize(m_window_size.width, m_window_size.height))
-    {
-        spdlog::error("App::handle_resize: failed to resize post process pass resources");
-        return false;
-    }
-
-    m_scene.camera.aspect =
-        static_cast<float>(m_window_size.width) / static_cast<float>(m_window_size.height);
+    m_scene.camera.aspect = static_cast<float>(new_width) / static_cast<float>(new_height);
 
     return true;
 }

@@ -1,5 +1,6 @@
 #include "post_process_pass.hpp"
 
+#include <d3d12.h>
 #include <directx/d3dx12.h>
 
 #include <spdlog/spdlog.h>

@@ -2,6 +2,7 @@
 
 #include <array>
 
+#include <d3d12.h>
 #include <directx/d3dx12.h>
 
 #include <spdlog/spdlog.h>
@@ -140,7 +141,7 @@ bool ShadowMapPass::init()
     return true;
 }
 
-void ShadowMapPass::run(ID3D12GraphicsCommandList *cmd_list, Scene &scene)
+void ShadowMapPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
 {
     ConstantBuffer constants{
         .proj_view = scene.sun.proj_view_matrix(),

@@ -80,3 +80,10 @@ struct Scene
     std::vector<Material> materials;
     std::vector<Object> objects;
 };
+
+struct Settings
+{
+    int tm_method{0};
+    float gamma{2.2f};
+    float exposure{1.0f};
+};

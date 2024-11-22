@@ -53,7 +53,7 @@ class ForwardPass
     ForwardPass &operator=(ForwardPass &&) = delete;
 
   public:
-    explicit ForwardPass(RHI *engine) : m_rhi(engine)
+    explicit ForwardPass(RHI *rhi) : m_rhi(rhi)
     {
     }
 

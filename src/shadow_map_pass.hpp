@@ -31,7 +31,7 @@ class ShadowMapPass
     ShadowMapPass &operator=(ShadowMapPass &&) = delete;
 
   public:
-    explicit ShadowMapPass(RHI *engine) : m_rhi(engine)
+    explicit ShadowMapPass(RHI *rhi) : m_rhi(rhi)
     {
     }
 
@@ -42,5 +42,5 @@ class ShadowMapPass
 
     [[nodiscard]] bool init();
 
-    void run(ID3D12GraphicsCommandList *cmd_list, Scene &scene);
+    void run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene);
 };

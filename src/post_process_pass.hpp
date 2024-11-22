@@ -40,7 +40,7 @@ class PostProcessPass
     PostProcessPass &operator=(PostProcessPass &&) = delete;
 
   public:
-    explicit PostProcessPass(RHI *engine) : m_rhi(engine)
+    explicit PostProcessPass(RHI *rhi) : m_rhi(rhi)
     {
     }
 

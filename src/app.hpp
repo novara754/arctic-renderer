@@ -4,16 +4,11 @@
 #include <chrono>
 #include <filesystem>
 
-#include <d3d12.h>
-
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_video.h>
 
-#include "forward_pass.hpp"
-#include "post_process_pass.hpp"
-#include "rhi.hpp"
+#include "renderer.hpp"
 #include "scene.hpp"
-#include "shadow_map_pass.hpp"
 
 class App
 {
@@ -22,12 +17,7 @@ class App
     static constexpr uint32_t WINDOW_HEIGHT = 720;
 
   private:
-    SDL_Window *m_window;
-
-    struct
-    {
-        uint32_t width, height;
-    } m_window_size{WINDOW_WIDTH, WINDOW_HEIGHT};
+    Renderer m_renderer;
 
     std::chrono::high_resolution_clock::time_point m_last_frame_time;
     float m_delta_time;
@@ -38,13 +28,6 @@ class App
     } m_input{};
     float m_camera_speed{10.0f};
     float m_mouse_sensitivity{0.5f};
-
-    RHI m_rhi;
-    ShadowMapPass m_shadow_map_pass;
-    ForwardPass m_forward_pass;
-    PostProcessPass m_post_process_pass;
-
-    ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
 
     std::filesystem::path m_scene_path;
     Scene m_scene{
@@ -64,14 +47,11 @@ class App
         .meshes{},
         .objects{},
     };
-    float m_gamma{2.2f};
-    int m_tm_method{0};
-    float m_exposure{1.0f};
+    Settings m_settings;
 
   public:
     explicit App(SDL_Window *window, const std::filesystem::path &scene_path)
-        : m_window(window), m_shadow_map_pass(&m_rhi), m_forward_pass(&m_rhi),
-          m_post_process_pass(&m_rhi), m_scene_path(scene_path)
+        : m_renderer(window, WINDOW_WIDTH, WINDOW_HEIGHT), m_scene_path(scene_path)
     {
     }
 
