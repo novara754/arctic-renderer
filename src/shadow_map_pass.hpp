@@ -3,7 +3,7 @@
 #include <d3d12.h>
 
 #include "comptr.hpp"
-#include "engine.hpp"
+#include "rhi.hpp"
 #include "scene.hpp"
 
 class ShadowMapPass
@@ -16,7 +16,7 @@ class ShadowMapPass
 
     static constexpr uint32_t SIZE = 4000;
 
-    Engine *m_engine;
+    RHI *m_rhi;
 
     ComPtr<ID3D12DescriptorHeap> m_dsv_heap;
     ComPtr<ID3D12Resource> m_depth_texture;
@@ -31,7 +31,7 @@ class ShadowMapPass
     ShadowMapPass &operator=(ShadowMapPass &&) = delete;
 
   public:
-    explicit ShadowMapPass(Engine *engine) : m_engine(engine)
+    explicit ShadowMapPass(RHI *engine) : m_rhi(engine)
     {
     }
 

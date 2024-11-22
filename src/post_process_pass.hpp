@@ -3,7 +3,7 @@
 #include <d3d12.h>
 
 #include "comptr.hpp"
-#include "engine.hpp"
+#include "rhi.hpp"
 
 class PostProcessPass
 {
@@ -17,7 +17,7 @@ class PostProcessPass
     static constexpr uint32_t GROUP_WIDTH = 16;
     static constexpr uint32_t GROUP_HEIGHT = 16;
 
-    Engine *m_engine;
+    RHI *m_rhi;
 
     struct
     {
@@ -40,7 +40,7 @@ class PostProcessPass
     PostProcessPass &operator=(PostProcessPass &&) = delete;
 
   public:
-    explicit PostProcessPass(Engine *engine) : m_engine(engine)
+    explicit PostProcessPass(RHI *engine) : m_rhi(engine)
     {
     }
 

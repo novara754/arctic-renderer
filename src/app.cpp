@@ -22,7 +22,7 @@ glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
 
 [[nodiscard]] bool App::init()
 {
-    if (!m_engine.init(m_window, m_window_size.width, m_window_size.height))
+    if (!m_rhi.init(m_window, m_window_size.width, m_window_size.height))
     {
         spdlog::error("App::init: failed to initialize engine");
         return false;
@@ -45,7 +45,7 @@ glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
             m_window_size.width,
             m_window_size.height,
             m_forward_pass.color_target(),
-            m_engine.swapchain_format()
+            m_rhi.swapchain_format()
         ))
     {
         spdlog::error("App::init: failed to initialize post process pass");
@@ -56,7 +56,7 @@ glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
     // Initialize ImGui
     // -------
     {
-        if (!m_engine.create_descriptor_heap(
+        if (!m_rhi.create_descriptor_heap(
                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                 1,
                 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
@@ -73,9 +73,9 @@ glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
 
         ImGui_ImplSDL3_InitForOther(m_window);
         ImGui_ImplDX12_Init(
-            m_engine.device(),
-            Engine::NUM_FRAMES,
-            m_engine.swapchain_format(),
+            m_rhi.device(),
+            RHI::NUM_FRAMES,
+            m_rhi.swapchain_format(),
             m_imgui_cbv_srv_heap.Get(),
             m_imgui_cbv_srv_heap->GetCPUDescriptorHandleForHeapStart(),
             m_imgui_cbv_srv_heap->GetGPUDescriptorHandleForHeapStart()
@@ -136,7 +136,7 @@ void App::run()
     spdlog::trace("App::run: exited loop");
 
     spdlog::trace("App::run: flushing...");
-    if (!m_engine.flush())
+    if (!m_rhi.flush())
     {
         spdlog::error("App::run: flush failed");
     }
@@ -254,14 +254,14 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
             return false;
         }
 
-        bool res = m_engine.create_texture(
+        bool res = m_rhi.create_texture(
             width,
             height,
             DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             material.diffuse
         );
-        res &= m_engine.upload_to_texture(
+        res &= m_rhi.upload_to_texture(
             material.diffuse.Get(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             image_data,
@@ -329,14 +329,14 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
         Mesh mesh;
 
         uint64_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
-        res &= m_engine.create_buffer(
+        res &= m_rhi.create_buffer(
             vertex_buffer_size,
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
             D3D12_HEAP_TYPE_DEFAULT,
             mesh.vertex_buffer
         );
 
-        res &= m_engine.upload_to_buffer(
+        res &= m_rhi.upload_to_buffer(
             mesh.vertex_buffer.Get(),
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
             vertices.data(),
@@ -344,14 +344,14 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
         );
 
         uint64_t index_buffer_size = indices.size() * sizeof(uint32_t);
-        res &= m_engine.create_buffer(
+        res &= m_rhi.create_buffer(
             index_buffer_size,
             D3D12_RESOURCE_STATE_INDEX_BUFFER,
             D3D12_HEAP_TYPE_DEFAULT,
             mesh.index_buffer
         );
 
-        res &= m_engine.upload_to_buffer(
+        res &= m_rhi.upload_to_buffer(
             mesh.index_buffer.Get(),
             D3D12_RESOURCE_STATE_INDEX_BUFFER,
             indices.data(),
@@ -417,9 +417,9 @@ bool App::render_frame()
     ImGui::NewFrame();
     build_ui();
 
-    bool res = m_engine.render_frame([&](ID3D12GraphicsCommandList *cmd_list,
-                                         ID3D12Resource *target,
-                                         D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle) {
+    bool res = m_rhi.render_frame([&](ID3D12GraphicsCommandList *cmd_list,
+                                      ID3D12Resource *target,
+                                      D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle) {
         m_shadow_map_pass.run(cmd_list, m_scene);
 
         CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -551,13 +551,13 @@ bool App::handle_resize()
     m_window_size.width = std::max(1u, width);
     m_window_size.height = std::max(1u, height);
 
-    if (!m_engine.flush())
+    if (!m_rhi.flush())
     {
         spdlog::error("App::handle_resize: failed to flush");
         return false;
     }
 
-    if (!m_engine.resize(m_window_size.width, m_window_size.height))
+    if (!m_rhi.resize(m_window_size.width, m_window_size.height))
     {
         spdlog::error("App::handle_resize: failed to resize engine resources");
         return false;

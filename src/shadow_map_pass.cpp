@@ -20,7 +20,7 @@ bool ShadowMapPass::init()
     }
     spdlog::trace("ShadowMapPass::init: compiled depth shader");
 
-    if (!m_engine->create_texture(
+    if (!m_rhi->create_texture(
             SIZE,
             SIZE,
             DXGI_FORMAT_R32_TYPELESS,
@@ -33,7 +33,7 @@ bool ShadowMapPass::init()
         return false;
     }
 
-    if (!m_engine->create_descriptor_heap(
+    if (!m_rhi->create_descriptor_heap(
             D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
             1,
             D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
@@ -48,7 +48,7 @@ bool ShadowMapPass::init()
     D3D12_DEPTH_STENCIL_VIEW_DESC shadow_map_dsv{};
     shadow_map_dsv.Format = DXGI_FORMAT_D32_FLOAT;
     shadow_map_dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-    m_engine->device()->CreateDepthStencilView(
+    m_rhi->device()->CreateDepthStencilView(
         m_depth_texture.Get(),
         &shadow_map_dsv,
         m_dsv_heap->GetCPUDescriptorHandleForHeapStart()
@@ -77,7 +77,7 @@ bool ShadowMapPass::init()
         "ShadowMapPass::init: failed to serialize root signature"
     );
     DXERR(
-        m_engine->device()->CreateRootSignature(
+        m_rhi->device()->CreateRootSignature(
             0,
             root_signature->GetBufferPointer(),
             root_signature->GetBufferSize(),
@@ -132,7 +132,7 @@ bool ShadowMapPass::init()
     pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
     pipeline_desc.SampleDesc = {1, 0};
     DXERR(
-        m_engine->device()->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&m_pipeline)),
+        m_rhi->device()->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&m_pipeline)),
         "ShadowMapPass::init: failed to create pipeline state"
     );
     spdlog::trace("ShadowMapPass::init: created pipeline state");

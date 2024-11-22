@@ -15,7 +15,7 @@ bool PostProcessPass::init(
     m_output_size = {width, height};
 
     m_output_format = output_format;
-    if (!m_engine->create_texture(
+    if (!m_rhi->create_texture(
             width,
             height,
             output_format,
@@ -28,7 +28,7 @@ bool PostProcessPass::init(
         return false;
     }
 
-    if (!m_engine->create_descriptor_heap(
+    if (!m_rhi->create_descriptor_heap(
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             2,
             D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
@@ -40,8 +40,7 @@ bool PostProcessPass::init(
     }
 
     m_uav_descriptor_size =
-        m_engine->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
-        );
+        m_rhi->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE uav_handle(m_uav_heap->GetCPUDescriptorHandleForHeapStart());
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
@@ -49,11 +48,11 @@ bool PostProcessPass::init(
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     uav_desc.Texture2D.MipSlice = 0;
     uav_desc.Texture2D.PlaneSlice = 0;
-    m_engine->device()->CreateUnorderedAccessView(input, nullptr, &uav_desc, uav_handle);
+    m_rhi->device()->CreateUnorderedAccessView(input, nullptr, &uav_desc, uav_handle);
 
     uav_handle.Offset(m_uav_descriptor_size);
     uav_desc.Format = output_format;
-    m_engine->device()
+    m_rhi->device()
         ->CreateUnorderedAccessView(m_output_texture.Get(), nullptr, &uav_desc, uav_handle);
 
     ComPtr<ID3DBlob> cs_code;
@@ -92,7 +91,7 @@ bool PostProcessPass::init(
         return false;
     }
     DXERR(
-        m_engine->device()->CreateRootSignature(
+        m_rhi->device()->CreateRootSignature(
             0,
             root_signature->GetBufferPointer(),
             root_signature->GetBufferSize(),
@@ -106,7 +105,7 @@ bool PostProcessPass::init(
     pipeline_desc.pRootSignature = m_root_signature.Get();
     pipeline_desc.CS = CD3DX12_SHADER_BYTECODE(cs_code.Get());
     DXERR(
-        m_engine->device()->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&m_pipeline)),
+        m_rhi->device()->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&m_pipeline)),
         "PostProcessPass::init: failed to create pipeline state"
     );
 
@@ -118,7 +117,7 @@ bool PostProcessPass::init(
     m_output_size = {new_width, new_height};
 
     m_output_texture.Reset();
-    if (!m_engine->create_texture(
+    if (!m_rhi->create_texture(
             new_width,
             new_height,
             m_output_format,

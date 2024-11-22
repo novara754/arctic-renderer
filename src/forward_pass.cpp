@@ -13,7 +13,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     m_output_size.width = width;
     m_output_size.height = height;
 
-    if (!m_engine->create_descriptor_heap(
+    if (!m_rhi->create_descriptor_heap(
             D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             1,
             D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
@@ -25,7 +25,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     }
     spdlog::trace("ForwardPass::init: created rtv descriptor heap");
 
-    if (!m_engine->create_texture(
+    if (!m_rhi->create_texture(
             width,
             height,
             DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -38,7 +38,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
         return false;
     }
 
-    m_engine->device()->CreateRenderTargetView(
+    m_rhi->device()->CreateRenderTargetView(
         m_color_target.Get(),
         nullptr,
         m_rtv_heap->GetCPUDescriptorHandleForHeapStart()
@@ -64,13 +64,13 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     // Create depth texture and DSV heap
     // -------
     {
-        if (!m_engine->create_depth_texture(width, height, m_depth_texture))
+        if (!m_rhi->create_depth_texture(width, height, m_depth_texture))
         {
             spdlog::error("ForwardPass::init: failed to create depth texture");
             return false;
         }
 
-        if (!m_engine->create_descriptor_heap(
+        if (!m_rhi->create_descriptor_heap(
                 D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
                 1,
                 D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
@@ -83,9 +83,9 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
         spdlog::trace("ForwardPass::init: created dsv descriptor heap");
 
         m_dsv_descriptor_size =
-            m_engine->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+            m_rhi->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
-        m_engine->device()->CreateDepthStencilView(
+        m_rhi->device()->CreateDepthStencilView(
             m_depth_texture.Get(),
             nullptr,
             m_dsv_heap->GetCPUDescriptorHandleForHeapStart()
@@ -96,7 +96,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     // Create SRV heap
     // -------
     {
-        if (!m_engine->create_descriptor_heap(
+        if (!m_rhi->create_descriptor_heap(
                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                 50,
                 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
@@ -108,16 +108,16 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
         }
         spdlog::trace("ForwardPass::init: created srv descriptor heap");
 
-        m_srv_descriptor_size = m_engine->device()->GetDescriptorHandleIncrementSize(
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
-        );
+        m_srv_descriptor_size =
+            m_rhi->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+            );
 
         D3D12_SHADER_RESOURCE_VIEW_DESC shadow_map_srv_desc{};
         shadow_map_srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         shadow_map_srv_desc.Format = DXGI_FORMAT_R32_FLOAT;
         shadow_map_srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         shadow_map_srv_desc.Texture2D.MipLevels = 1;
-        m_engine->device()->CreateShaderResourceView(
+        m_rhi->device()->CreateShaderResourceView(
             shadow_map,
             &shadow_map_srv_desc,
             m_srv_heap->GetCPUDescriptorHandleForHeapStart()
@@ -178,7 +178,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
         return false;
     }
     DXERR(
-        m_engine->device()->CreateRootSignature(
+        m_rhi->device()->CreateRootSignature(
             0,
             root_signature->GetBufferPointer(),
             root_signature->GetBufferSize(),
@@ -237,7 +237,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     pipeline_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
     pipeline_desc.SampleDesc = {1, 0};
     DXERR(
-        m_engine->device()->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&m_pipeline)),
+        m_rhi->device()->CreateGraphicsPipelineState(&pipeline_desc, IID_PPV_ARGS(&m_pipeline)),
         "ForwardPass::init: failed to create pipeline state"
     );
     spdlog::trace("ForwardPass::init: created pipeline state");
@@ -248,13 +248,13 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
 bool ForwardPass::resize(uint32_t new_width, uint32_t new_height)
 {
     m_depth_texture.Reset();
-    if (!m_engine->create_depth_texture(new_width, new_height, m_depth_texture))
+    if (!m_rhi->create_depth_texture(new_width, new_height, m_depth_texture))
     {
         spdlog::error("ForwardPass::resize: failed to create depth texture");
         return false;
     }
 
-    m_engine->device()->CreateDepthStencilView(
+    m_rhi->device()->CreateDepthStencilView(
         m_depth_texture.Get(),
         nullptr,
         m_dsv_heap->GetCPUDescriptorHandleForHeapStart()
@@ -342,5 +342,5 @@ void ForwardPass::create_srv_tex2d(int32_t index, ID3D12Resource *resource, DXGI
     srv_desc.Format = format;
     srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srv_desc.Texture2D.MipLevels = 1;
-    m_engine->device()->CreateShaderResourceView(resource, &srv_desc, srv_handle);
+    m_rhi->device()->CreateShaderResourceView(resource, &srv_desc, srv_handle);
 }

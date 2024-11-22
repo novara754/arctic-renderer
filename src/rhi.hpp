@@ -11,7 +11,7 @@
 
 #include "comptr.hpp"
 
-class Engine
+class RHI
 {
   public:
     static constexpr size_t NUM_FRAMES = 2;
@@ -46,13 +46,13 @@ class Engine
         uint64_t fence_value{0};
     } m_immediate_submit;
 
-    Engine(const Engine &) = delete;
-    Engine &operator=(const Engine &) = delete;
-    Engine(Engine &&) = delete;
-    Engine &operator=(Engine &&) = delete;
+    RHI(const RHI &) = delete;
+    RHI &operator=(const RHI &) = delete;
+    RHI(RHI &&) = delete;
+    RHI &operator=(RHI &&) = delete;
 
   public:
-    Engine() = default;
+    RHI() = default;
 
     [[nodiscard]] bool init(SDL_Window *window, uint64_t width, uint32_t height);
 

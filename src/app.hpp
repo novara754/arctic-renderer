@@ -9,9 +9,9 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_video.h>
 
-#include "engine.hpp"
 #include "forward_pass.hpp"
 #include "post_process_pass.hpp"
+#include "rhi.hpp"
 #include "scene.hpp"
 #include "shadow_map_pass.hpp"
 
@@ -39,7 +39,7 @@ class App
     float m_camera_speed{10.0f};
     float m_mouse_sensitivity{0.5f};
 
-    Engine m_engine;
+    RHI m_rhi;
     ShadowMapPass m_shadow_map_pass;
     ForwardPass m_forward_pass;
     PostProcessPass m_post_process_pass;
@@ -70,8 +70,8 @@ class App
 
   public:
     explicit App(SDL_Window *window, const std::filesystem::path &scene_path)
-        : m_window(window), m_shadow_map_pass(&m_engine), m_forward_pass(&m_engine),
-          m_post_process_pass(&m_engine), m_scene_path(scene_path)
+        : m_window(window), m_shadow_map_pass(&m_rhi), m_forward_pass(&m_rhi),
+          m_post_process_pass(&m_rhi), m_scene_path(scene_path)
     {
     }
 

@@ -1,4 +1,4 @@
-#include "engine.hpp"
+#include "rhi.hpp"
 
 #include <d3dcompiler.h>
 
@@ -12,7 +12,7 @@ bool get_best_adapter(
 
 bool has_tearing_support(ComPtr<IDXGIFactory4> dxgi_factory4);
 
-bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
+bool RHI::init(SDL_Window *window, uint64_t width, uint32_t height)
 {
 #if defined(_DEBUG)
     // ------------
@@ -22,10 +22,10 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
         ComPtr<ID3D12Debug> debug_interface;
         DXERR(
             D3D12GetDebugInterface(IID_PPV_ARGS(&debug_interface)),
-            "Engine::init: failed to get debug interface"
+            "RHI::init: failed to get debug interface"
         );
         debug_interface->EnableDebugLayer();
-        spdlog::trace("Engine::init: enabled d3d12 debug layer");
+        spdlog::trace("RHI::init: enabled d3d12 debug layer");
     }
 #endif
 
@@ -40,9 +40,9 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
 #endif
         DXERR(
             CreateDXGIFactory2(create_factory_flags, IID_PPV_ARGS(&dxgi_factory4)),
-            "Engine::init: failed to create dxgi factory 4"
+            "RHI::init: failed to create dxgi factory 4"
         );
-        spdlog::trace("Engine::init: created dxgi factory 4");
+        spdlog::trace("RHI::init: created dxgi factory 4");
     }
 
     // ------------
@@ -51,19 +51,19 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
     ComPtr<IDXGIAdapter4> dxgi_adapter4;
     if (!get_best_adapter(dxgi_factory4, dxgi_adapter4))
     {
-        spdlog::error("Engine::init: failed to find suitable adapter");
+        spdlog::error("RHI::init: failed to find suitable adapter");
         return false;
     }
-    spdlog::trace("Engine::init: found suitable adapter");
+    spdlog::trace("RHI::init: found suitable adapter");
 
     // ------------
     // Create device
     // -------
     DXERR(
         D3D12CreateDevice(dxgi_adapter4.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)),
-        "Engine::init: failed to create device"
+        "RHI::init: failed to create device"
     );
-    spdlog::trace("Engine::init: created device");
+    spdlog::trace("RHI::init: created device");
 
 #if defined(_DEBUG)
     // ------------
@@ -95,10 +95,10 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
 
             DXERR(
                 info_queue->PushStorageFilter(&filter),
-                "Engine::init: failed to set storage filter"
+                "RHI::init: failed to set storage filter"
             );
         }
-        spdlog::trace("Engine::init: created device");
+        spdlog::trace("RHI::init: created device");
     }
 #endif
 
@@ -113,16 +113,16 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
         desc.NodeMask = 0;
         DXERR(
             m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_command_queue)),
-            "Engine::init: failed create command queue"
+            "RHI::init: failed create command queue"
         );
-        spdlog::trace("Engine::init: created command queue");
+        spdlog::trace("RHI::init: created command queue");
     }
 
     // ------------
     // Check for tearing support
     // -------
     m_allow_tearing = has_tearing_support(dxgi_factory4);
-    spdlog::debug("Engine::init: allow tearing = {}", m_allow_tearing);
+    spdlog::debug("RHI::init: allow tearing = {}", m_allow_tearing);
 
     // ------------
     // Create swapchain
@@ -159,17 +159,14 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
                 nullptr,
                 &swapchain1
             ),
-            "Engine::init: failed to create swapchain1"
+            "RHI::init: failed to create swapchain1"
         );
         DXERR(
             dxgi_factory4->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER),
-            "Engine::init: failed to disable Alt+Enter"
+            "RHI::init: failed to disable Alt+Enter"
         );
-        DXERR(
-            swapchain1.As(&m_swapchain),
-            "Engine::init: failed to convert swapchain1 to swapchain4"
-        );
-        spdlog::trace("Engine::init: created swapchain");
+        DXERR(swapchain1.As(&m_swapchain), "RHI::init: failed to convert swapchain1 to swapchain4");
+        spdlog::trace("RHI::init: created swapchain");
 
         m_current_backbuffer_index = m_swapchain->GetCurrentBackBufferIndex();
     }
@@ -184,20 +181,20 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
             m_rtv_heap
         ))
     {
-        spdlog::error("Engine::init: failed to create rtv descriptor heap");
+        spdlog::error("RHI::init: failed to create rtv descriptor heap");
         return false;
     }
-    spdlog::trace("Engine::init: created rtv descriptor heap");
+    spdlog::trace("RHI::init: created rtv descriptor heap");
 
     // ------------
     // Create RTVs
     // -------
     if (!update_render_target_views())
     {
-        spdlog::error("Engine::init: failed to create rtvs");
+        spdlog::error("RHI::init: failed to create rtvs");
         return false;
     }
-    spdlog::trace("Engine::init: created rtvs");
+    spdlog::trace("RHI::init: created rtvs");
 
     // ------------
     // Create command allocators
@@ -209,10 +206,10 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
                 IID_PPV_ARGS(&m_command_allocators[i])
             ),
-            "Engine::init: failed to create command allocators"
+            "RHI::init: failed to create command allocators"
         );
     }
-    spdlog::trace("Engine::init: created command allocators");
+    spdlog::trace("RHI::init: created command allocators");
 
     // ------------
     // Create command list
@@ -225,24 +222,24 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
             nullptr,
             IID_PPV_ARGS(&m_command_list)
         ),
-        "Engine::init: failed to create command list"
+        "RHI::init: failed to create command list"
     );
-    DXERR(m_command_list->Close(), "Engine::init: failed to close command list");
+    DXERR(m_command_list->Close(), "RHI::init: failed to close command list");
 
     // ------------
     // Create fence
     // -------
     DXERR(
         m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)),
-        "Engine::init: failed to create fence"
+        "RHI::init: failed to create fence"
     );
     m_fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!m_fence_event)
     {
-        spdlog::error("Engine::init: failed to create fence event");
+        spdlog::error("RHI::init: failed to create fence event");
         return false;
     }
-    spdlog::trace("Engine::init: created fence and fence event");
+    spdlog::trace("RHI::init: created fence and fence event");
 
     // ------------
     // Create objects for immediate submit
@@ -253,7 +250,7 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
                 IID_PPV_ARGS(&m_immediate_submit.command_allocator)
             ),
-            "Engine::init: failed to create command allocator for immediate submit"
+            "RHI::init: failed to create command allocator for immediate submit"
         );
         m_immediate_submit.command_allocator->SetName(L"immediate submit command allocator");
 
@@ -265,28 +262,28 @@ bool Engine::init(SDL_Window *window, uint64_t width, uint32_t height)
                 nullptr,
                 IID_PPV_ARGS(&m_immediate_submit.command_list)
             ),
-            "Engine::init: failed to create command list for immediate submit"
+            "RHI::init: failed to create command list for immediate submit"
         );
         m_immediate_submit.command_list->SetName(L"immediate submit command list");
         DXERR(
             m_immediate_submit.command_list->Close(),
-            "Engine::init: failed to close command list for immediate submit"
+            "RHI::init: failed to close command list for immediate submit"
         );
 
         DXERR(
             m_device
                 ->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_immediate_submit.fence)),
-            "Engine::init: failed to create fence for immediate submit"
+            "RHI::init: failed to create fence for immediate submit"
         );
         m_immediate_submit.fence->SetName(L"immediate submit command fence");
         m_immediate_submit.fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
         if (!m_immediate_submit.fence_event)
         {
-            spdlog::error("Engine::init: failed to create fence event for immediate submit");
+            spdlog::error("RHI::init: failed to create fence event for immediate submit");
             return false;
         }
 
-        spdlog::trace("Engine::init: created immediate submit objects");
+        spdlog::trace("RHI::init: created immediate submit objects");
     }
 
     return true;
@@ -322,7 +319,7 @@ bool get_best_adapter(ComPtr<IDXGIFactory4> dxgi_factory4, ComPtr<IDXGIAdapter4>
     return true;
 }
 
-bool Engine::resize(uint32_t new_width, int32_t new_height)
+bool RHI::resize(uint32_t new_width, int32_t new_height)
 {
     for (int i = 0; i < NUM_FRAMES; ++i)
     {
@@ -333,7 +330,7 @@ bool Engine::resize(uint32_t new_width, int32_t new_height)
     DXGI_SWAP_CHAIN_DESC swap_chain_desc{};
     DXERR(
         m_swapchain->GetDesc(&swap_chain_desc),
-        "Engine::handle_resize: failed to get previous swapchain description"
+        "RHI::handle_resize: failed to get previous swapchain description"
     );
     DXERR(
         m_swapchain->ResizeBuffers(
@@ -343,20 +340,20 @@ bool Engine::resize(uint32_t new_width, int32_t new_height)
             swap_chain_desc.BufferDesc.Format,
             swap_chain_desc.Flags
         ),
-        "Engine::handle_resize: failed to resize buffers"
+        "RHI::handle_resize: failed to resize buffers"
     );
     m_current_backbuffer_index = m_swapchain->GetCurrentBackBufferIndex();
 
     if (!update_render_target_views())
     {
-        spdlog::error("Engine::handle_resize: failed to update rtvs");
+        spdlog::error("RHI::handle_resize: failed to update rtvs");
         return false;
     }
 
     return true;
 }
 
-bool Engine::render_frame(
+bool RHI::render_frame(
     std::function<void(ID3D12GraphicsCommandList *, ID3D12Resource *, D3D12_CPU_DESCRIPTOR_HANDLE)>
         &&render_func
 )
@@ -368,16 +365,16 @@ bool Engine::render_frame(
             m_fence_event,
             m_frame_fence_values[m_current_backbuffer_index]
         ),
-        "Engine::render_frame: failed to wait for fence"
+        "RHI::render_frame: failed to wait for fence"
     );
 
     ComPtr<ID3D12CommandAllocator> cmd_allocator = m_command_allocators[m_current_backbuffer_index];
     ComPtr<ID3D12Resource> backbuffer = m_backbuffers[m_current_backbuffer_index];
 
-    DXERR(cmd_allocator->Reset(), "Engine::render_frame: failed to reset command allocator");
+    DXERR(cmd_allocator->Reset(), "RHI::render_frame: failed to reset command allocator");
     DXERR(
         m_command_list->Reset(cmd_allocator.Get(), nullptr),
-        "Engine::render_frame: failed to reset command list"
+        "RHI::render_frame: failed to reset command list"
     );
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtv_handle(
@@ -387,7 +384,7 @@ bool Engine::render_frame(
     );
     render_func(m_command_list.Get(), backbuffer.Get(), rtv_handle);
 
-    DXERR(m_command_list->Close(), "Engine::render_frame: failed to close command list");
+    DXERR(m_command_list->Close(), "RHI::render_frame: failed to close command list");
     std::array<ID3D12CommandList *const, 1> lists{m_command_list.Get()};
     m_command_queue->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
 
@@ -399,13 +396,13 @@ bool Engine::render_frame(
             m_fence_value,
             m_frame_fence_values[m_current_backbuffer_index]
         ),
-        "Engine::render_frame: failed to signal fence"
+        "RHI::render_frame: failed to signal fence"
     );
 
     return true;
 }
 
-bool Engine::create_descriptor_heap(
+bool RHI::create_descriptor_heap(
     D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors, D3D12_DESCRIPTOR_HEAP_FLAGS flags,
     ComPtr<ID3D12DescriptorHeap> &out_heap
 )
@@ -416,13 +413,13 @@ bool Engine::create_descriptor_heap(
     heap_desc.Flags = flags;
     DXERR(
         m_device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&out_heap)),
-        "Engine::create_descriptor_heap: failed to create descriptor heap"
+        "RHI::create_descriptor_heap: failed to create descriptor heap"
     );
 
     return true;
 }
 
-bool Engine::update_render_target_views()
+bool RHI::update_render_target_views()
 {
     m_rtv_descriptor_size =
         m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -433,7 +430,7 @@ bool Engine::update_render_target_views()
     {
         DXERR(
             m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_backbuffers[i])),
-            "Engine::update_render_target_views: failed to get swapchain buffer"
+            "RHI::update_render_target_views: failed to get swapchain buffer"
         );
         m_device->CreateRenderTargetView(m_backbuffers[i].Get(), nullptr, rtv_handle);
         rtv_handle.Offset(m_rtv_descriptor_size);
@@ -442,22 +439,22 @@ bool Engine::update_render_target_views()
     return true;
 }
 
-bool Engine::immediate_submit(std::function<void(ID3D12GraphicsCommandList *cmd_list)> &&f)
+bool RHI::immediate_submit(std::function<void(ID3D12GraphicsCommandList *cmd_list)> &&f)
 {
     DXERR(
         m_immediate_submit.command_allocator->Reset(),
-        "Engine::immediate_submit: failed to reset command allocator"
+        "RHI::immediate_submit: failed to reset command allocator"
     );
     DXERR(
         m_immediate_submit.command_list->Reset(m_immediate_submit.command_allocator.Get(), nullptr),
-        "Engine::immediate_submit: failed to reset command list"
+        "RHI::immediate_submit: failed to reset command list"
     );
 
     f(m_immediate_submit.command_list.Get());
 
     DXERR(
         m_immediate_submit.command_list->Close(),
-        "Engine::immediate_submit: failed to close command list"
+        "RHI::immediate_submit: failed to close command list"
     );
 
     std::array<ID3D12CommandList *const, 1> lists{m_immediate_submit.command_list.Get()};
@@ -466,7 +463,7 @@ bool Engine::immediate_submit(std::function<void(ID3D12GraphicsCommandList *cmd_
     uint64_t wait_value;
     if (!signal_fence(m_immediate_submit.fence.Get(), m_immediate_submit.fence_value, wait_value))
     {
-        spdlog::error("Engine::immediate_submit: failed to signal fence");
+        spdlog::error("RHI::immediate_submit: failed to signal fence");
         return false;
     }
 
@@ -476,14 +473,14 @@ bool Engine::immediate_submit(std::function<void(ID3D12GraphicsCommandList *cmd_
             wait_value
         ))
     {
-        spdlog::error("Engine::immediate_submit: failed to wait for fence");
+        spdlog::error("RHI::immediate_submit: failed to wait for fence");
         return false;
     }
 
     return true;
 }
 
-bool Engine::create_buffer(
+bool RHI::create_buffer(
     uint64_t size, D3D12_RESOURCE_STATES initial_state, D3D12_HEAP_TYPE heap_type,
     ComPtr<ID3D12Resource> &out_buffer
 )
@@ -499,12 +496,12 @@ bool Engine::create_buffer(
             nullptr,
             IID_PPV_ARGS(&out_buffer)
         ),
-        "Engine::create_buffer: failed to create buffer"
+        "RHI::create_buffer: failed to create buffer"
     );
     return true;
 }
 
-bool Engine::create_texture(
+bool RHI::create_texture(
     uint64_t width, uint32_t height, DXGI_FORMAT format, D3D12_RESOURCE_STATES initial_state,
     ComPtr<ID3D12Resource> &out_texture, D3D12_RESOURCE_FLAGS flags
 )
@@ -522,15 +519,13 @@ bool Engine::create_texture(
             nullptr,
             IID_PPV_ARGS(&out_texture)
         ),
-        "Engine::create_texture: failed to create texture"
+        "RHI::create_texture: failed to create texture"
     );
 
     return true;
 }
 
-bool Engine::create_depth_texture(
-    uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture
-)
+bool RHI::create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture)
 {
     CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
     CD3DX12_RESOURCE_DESC resource_desc =
@@ -547,13 +542,13 @@ bool Engine::create_depth_texture(
             &clear_value,
             IID_PPV_ARGS(&out_texture)
         ),
-        "Engine::create_depth_texture: failed to create depth texture"
+        "RHI::create_depth_texture: failed to create depth texture"
     );
 
     return true;
 }
 
-bool Engine::upload_to_buffer(
+bool RHI::upload_to_buffer(
     ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
     uint64_t src_data_size
 )
@@ -566,14 +561,14 @@ bool Engine::upload_to_buffer(
             staging_buffer
         ))
     {
-        spdlog::error("Engine::upload_to_buffer: failed to create staging buffer");
+        spdlog::error("RHI::upload_to_buffer: failed to create staging buffer");
         return false;
     }
 
     void *staging_buffer_ptr;
     DXERR(
         staging_buffer->Map(0, nullptr, &staging_buffer_ptr),
-        "Engine::upload_to_buffer: failed to map staging buffer"
+        "RHI::upload_to_buffer: failed to map staging buffer"
     );
     std::memcpy(staging_buffer_ptr, src_data, src_data_size);
     staging_buffer->Unmap(0, nullptr);
@@ -600,14 +595,14 @@ bool Engine::upload_to_buffer(
 
     if (!res)
     {
-        spdlog::error("Engine::upload_to_buffer: immediate submit failed");
+        spdlog::error("RHI::upload_to_buffer: immediate submit failed");
         return false;
     }
 
     return true;
 }
 
-bool Engine::upload_to_texture(
+bool RHI::upload_to_texture(
     ID3D12Resource *dst_texture, D3D12_RESOURCE_STATES dst_texture_state, void *src_data,
     uint64_t width, uint64_t height, uint64_t channels
 )
@@ -621,7 +616,7 @@ bool Engine::upload_to_texture(
             staging_buffer
         ))
     {
-        spdlog::error("Engine::upload_to_texture: failed to create staging buffer");
+        spdlog::error("RHI::upload_to_texture: failed to create staging buffer");
         return false;
     }
 
@@ -650,30 +645,30 @@ bool Engine::upload_to_texture(
 
     if (!res)
     {
-        spdlog::error("Engine::upload_to_texture: immediate submit failed");
+        spdlog::error("RHI::upload_to_texture: immediate submit failed");
         return false;
     }
 
     return true;
 }
 
-bool Engine::signal_fence(ID3D12Fence *fence, uint64_t &fence_value, uint64_t &out_wait_value)
+bool RHI::signal_fence(ID3D12Fence *fence, uint64_t &fence_value, uint64_t &out_wait_value)
 {
     out_wait_value = ++fence_value;
     DXERR(
         m_command_queue->Signal(fence, out_wait_value),
-        "Engine::signal_fence: failed to signal fence"
+        "RHI::signal_fence: failed to signal fence"
     );
     return true;
 }
 
-bool Engine::wait_for_fence_value(ID3D12Fence *fence, HANDLE fence_event, uint64_t value)
+bool RHI::wait_for_fence_value(ID3D12Fence *fence, HANDLE fence_event, uint64_t value)
 {
     if (fence->GetCompletedValue() < value)
     {
         DXERR(
             fence->SetEventOnCompletion(value, fence_event),
-            "Engine::wait_for_fence_value: failed to set event"
+            "RHI::wait_for_fence_value: failed to set event"
         );
         std::chrono::milliseconds duration = std::chrono::milliseconds::max();
         WaitForSingleObject(fence_event, static_cast<DWORD>(duration.count()));
@@ -681,16 +676,16 @@ bool Engine::wait_for_fence_value(ID3D12Fence *fence, HANDLE fence_event, uint64
     return true;
 }
 
-bool Engine::flush()
+bool RHI::flush()
 {
     uint64_t wait_value;
     DXERR(
         signal_fence(m_fence.Get(), m_fence_value, wait_value),
-        "Engine::flush: failed to signal fence"
+        "RHI::flush: failed to signal fence"
     );
     DXERR(
         wait_for_fence_value(m_fence.Get(), m_fence_event, wait_value),
-        "Engine::flush: failed to wait for fence"
+        "RHI::flush: failed to wait for fence"
     );
     return true;
 }

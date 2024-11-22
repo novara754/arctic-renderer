@@ -3,7 +3,7 @@
 #include <d3d12.h>
 
 #include "comptr.hpp"
-#include "engine.hpp"
+#include "rhi.hpp"
 #include "scene.hpp"
 
 class ForwardPass
@@ -26,7 +26,7 @@ class ForwardPass
         "Size of ForwardPass::ConstantBuffer is not a multiple of 4"
     );
 
-    Engine *m_engine;
+    RHI *m_rhi;
 
     struct
     {
@@ -53,7 +53,7 @@ class ForwardPass
     ForwardPass &operator=(ForwardPass &&) = delete;
 
   public:
-    explicit ForwardPass(Engine *engine) : m_engine(engine)
+    explicit ForwardPass(RHI *engine) : m_rhi(engine)
     {
     }
 

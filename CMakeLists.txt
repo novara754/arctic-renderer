@@ -83,7 +83,7 @@ add_executable(arctic
         src/main.cpp
         src/app.cpp
         src/scene.cpp
-        src/engine.cpp
+        src/rhi.cpp
         src/forward_pass.cpp
         src/post_process_pass.cpp
         src/shadow_map_pass.cpp
