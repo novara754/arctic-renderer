@@ -69,7 +69,7 @@ bool Renderer::init()
 
 bool Renderer::resize(uint32_t &out_width, uint32_t &out_height)
 {
-    int window_width, window_height;
+    int window_width{}, window_height{};
     assert(SDL_GetWindowSize(m_window, &window_width, &window_height));
 
     uint32_t width = static_cast<uint32_t>(window_width);
