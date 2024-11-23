@@ -7,9 +7,16 @@
   },
   "configurePresets": [
     {
-      "name": "MSVC",
-      "displayName": "MSVC",
-      "description": "Configure and generate MSVC project files for all configurations",
+      "name": "Debug",
+      "displayName": "MSVC (Debug)",
+      "description": "Configure and generate MSVC project files for all configurations in debug mode",
+      "binaryDir": "${sourceDir}/build/",
+      "generator": "Visual Studio 17 2022"
+    },
+    {
+      "name": "Release",
+      "displayName": "MSVC (Release)",
+      "description": "Configure and generate MSVC project files for all configurations in release mode",
       "binaryDir": "${sourceDir}/build/",
       "generator": "Visual Studio 17 2022"
     }
@@ -17,10 +24,17 @@
   "buildPresets": [
     {
       "name": "Debug",
-      "configurePreset": "MSVC",
+      "configurePreset": "Debug",
       "displayName": "Build (Debug)",
       "description": "Build with MSVC (Debug)",
       "configuration": "Debug"
+    },
+    {
+      "name": "Release",
+      "configurePreset": "Release",
+      "displayName": "Build (Release)",
+      "description": "Build with MSVC (Release)",
+      "configuration": "Release"
     }
   ]
 }
