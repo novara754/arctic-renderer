@@ -131,12 +131,14 @@ bool Renderer::render_frame(
             D3D12_RESOURCE_STATE_DEPTH_WRITE,
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
         );
+        cmd_list->ResourceBarrier(1, &barrier);
         m_forward_pass.run(cmd_list, scene);
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_shadow_map_pass.shadow_map(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_DEPTH_WRITE
         );
+        cmd_list->ResourceBarrier(1, &barrier);
 
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_forward_pass.color_target(),
