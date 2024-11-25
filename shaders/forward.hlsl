@@ -9,13 +9,15 @@ cbuffer Scene : register(b0)
 }
 
 Texture2D t_shadow_map : register(t0);
-Texture2D t_diffuse : register(t1);
+Texture2D t_textures[2] : register(t1);
 SamplerState s_sampler : register(s0);
 
 struct VSIn
 {
 	float3 position : POSITION;
 	float3 normal : NORMAL;
+	float3 tangent : TANGENT;
+	float3 bitangent : BITANGENT;
 	float2 tex_coords : TEXCOORD;
 };
 
@@ -23,19 +25,22 @@ struct VSOut
 {
 	float4 clip_position : SV_POSITION;
 	float2 tex_coords : TEXCOORD;
-	float3 normal : NORMAL;
+	float3x3 tbn : NORMAL;
 	float4 light_space_position : POSITION;
 };
 
-VSOut vs_main(uint id : SV_VERTEXID, VSIn vs_in)
+VSOut vs_main(VSIn vs_in)
 {
 	float4 world_pos = mul(model, float4(vs_in.position, 1.0));
 
-	VSOut vs_out;
+	float3 t = normalize(vs_in.tangent);
+	float3 n = normalize(vs_in.normal);
+	float3 b = normalize(vs_in.bitangent);
 
+	VSOut vs_out;
 	vs_out.clip_position = mul(proj_view, world_pos);
 	vs_out.tex_coords = vs_in.tex_coords;
-	vs_out.normal = vs_in.normal;
+	vs_out.tbn = transpose(float3x3(t, b, n));
 	vs_out.light_space_position = mul(light_proj_view, world_pos);
 
 	return vs_out;
@@ -71,8 +76,12 @@ float calculate_shadow(float3 normal, float4 light_space_position)
 
 float4 ps_main(VSOut vs_out) : SV_TARGET
 {
-	float3 normal = normalize(vs_out.normal);
-	float3 base_color = t_diffuse.Sample(s_sampler, vs_out.tex_coords).rgb;
+	float3 normal = t_textures[1].Sample(s_sampler, vs_out.tex_coords).rgb;
+	normal.g = 1.0 - normal.g;
+	normal = normal * 2.0 - 1.0;
+	normal = normalize(mul(vs_out.tbn, normal));
+
+	float3 base_color = t_textures[0].Sample(s_sampler, vs_out.tex_coords).rgb;
 
 	float shadow = calculate_shadow(normal, vs_out.light_space_position);
 

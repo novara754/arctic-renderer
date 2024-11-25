@@ -33,6 +33,8 @@ struct Vertex
 {
     glm::vec3 position;
     glm::vec3 normal;
+    glm::vec3 tangent;
+    glm::vec3 bitangent;
     glm::vec2 tex_coords;
 };
 
@@ -52,6 +54,7 @@ struct Mesh
 struct Material
 {
     ComPtr<ID3D12Resource> diffuse;
+    ComPtr<ID3D12Resource> normal;
 };
 
 struct Object

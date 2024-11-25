@@ -46,6 +46,7 @@ glm::mat4 DirectionalLight::proj_view_matrix() const
     glm::vec3 up(0.0f, 1.0f, 0.0f);
 
     glm::mat4 view = glm::lookAtRH(this->position, this->position + forward, up);
+    // glm::mat4 proj = glm::orthoRH(-5.0f, 5.0f, -5.0f, 5.0f, 0.1f, 10.0f);
     glm::mat4 proj = glm::orthoRH(-16.0f, 16.0f, -16.0f, 16.0f, 0.1f, 50.0f);
     return proj * view;
 }

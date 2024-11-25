@@ -268,7 +268,7 @@ bool Renderer::create_mesh(
 
 bool Renderer::create_material(
     Material &out_material, size_t material_idx, void *diffuse_data, uint32_t diffuse_width,
-    uint32_t diffuse_height
+    uint32_t diffuse_height, void *normal_data, uint32_t normal_width, uint32_t normal_height
 )
 {
     bool res = m_rhi.create_texture(
@@ -292,10 +292,37 @@ bool Renderer::create_material(
         return false;
     }
 
+    res = m_rhi.create_texture(
+        normal_width,
+        normal_height,
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        out_material.normal
+    );
+    res &= m_rhi.upload_to_texture(
+        out_material.normal.Get(),
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        normal_data,
+        normal_width,
+        normal_height,
+        4
+    );
+    if (!res)
+    {
+        spdlog::error("Renderer::create_material: failed to create normal texture");
+        return false;
+    }
+
     m_forward_pass.create_srv_tex2d(
-        static_cast<int32_t>(material_idx),
+        static_cast<int32_t>(material_idx * 2),
         out_material.diffuse.Get(),
         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+    );
+
+    m_forward_pass.create_srv_tex2d(
+        static_cast<int32_t>(material_idx * 2 + 1),
+        out_material.normal.Get(),
+        DXGI_FORMAT_R8G8B8A8_UNORM
     );
 
     return true;

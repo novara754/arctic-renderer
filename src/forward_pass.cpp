@@ -99,7 +99,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     {
         if (!m_rhi->create_descriptor_heap(
                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                50,
+                128,
                 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
                 m_srv_heap
             ))
@@ -135,7 +135,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     shadow_map_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
     CD3DX12_DESCRIPTOR_RANGE material_range;
-    material_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 1);
+    material_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 1, 0, 1);
 
     std::array<CD3DX12_ROOT_PARAMETER, 3> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
@@ -208,6 +208,24 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
             .Format = DXGI_FORMAT_R32G32B32_FLOAT,
             .InputSlot = 0,
             .AlignedByteOffset = offsetof(Vertex, normal),
+            .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+            .InstanceDataStepRate = 0,
+        },
+        D3D12_INPUT_ELEMENT_DESC{
+            .SemanticName = "TANGENT",
+            .SemanticIndex = 0,
+            .Format = DXGI_FORMAT_R32G32B32_FLOAT,
+            .InputSlot = 0,
+            .AlignedByteOffset = offsetof(Vertex, tangent),
+            .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+            .InstanceDataStepRate = 0,
+        },
+        D3D12_INPUT_ELEMENT_DESC{
+            .SemanticName = "BITANGENT",
+            .SemanticIndex = 0,
+            .Format = DXGI_FORMAT_R32G32B32_FLOAT,
+            .InputSlot = 0,
+            .AlignedByteOffset = offsetof(Vertex, bitangent),
             .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
             .InstanceDataStepRate = 0,
         },
@@ -318,13 +336,13 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
         const Mesh &mesh = scene.meshes[obj.mesh_idx];
         constants.model = obj.trs;
 
-        CD3DX12_GPU_DESCRIPTOR_HANDLE diffuse_srv_handle(
+        CD3DX12_GPU_DESCRIPTOR_HANDLE material_srv_handle(
             m_srv_heap->GetGPUDescriptorHandleForHeapStart(),
-            static_cast<INT>(mesh.material_idx),
+            static_cast<INT>(mesh.material_idx * 2),
             m_srv_descriptor_size
         );
         cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
-        cmd_list->SetGraphicsRootDescriptorTable(2, diffuse_srv_handle);
+        cmd_list->SetGraphicsRootDescriptorTable(2, material_srv_handle);
         cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
         cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
         cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);

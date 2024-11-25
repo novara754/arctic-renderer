@@ -152,7 +152,8 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
 
     const aiScene *scene = importer.ReadFile(
         path.string(),
-        aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs
+        aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_FlipUVs |
+            aiProcess_CalcTangentSpace
     );
     if (scene == nullptr)
     {
@@ -170,6 +171,7 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
     {
 
         std::filesystem::path diffuse_path = path;
+        std::filesystem::path normal_path = path;
 
         const aiMaterial *ai_material = scene->mMaterials[mat_idx];
         if (ai_material->GetTextureCount(aiTextureType_DIFFUSE) > 0)
@@ -187,17 +189,50 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
             diffuse_path = "./assets/white.png";
         }
 
-        int width, height, channels = 4;
-        uint8_t *image_data =
-            stbi_load(diffuse_path.string().c_str(), &width, &height, nullptr, channels);
-        if (!image_data)
+        if (ai_material->GetTextureCount(aiTextureType_NORMALS) > 0)
+        {
+            aiString normal_name;
+            ai_material->GetTexture(aiTextureType_NORMALS, 0, &normal_name);
+            normal_path.replace_filename(normal_name.C_Str());
+        }
+        else
+        {
+            spdlog::warn(
+                "App::load_scene: material #{} missing normal texture, using fallback",
+                mat_idx
+            );
+            normal_path = "./assets/white.png";
+        }
+
+        int diffuse_width, diffuse_height;
+        uint8_t *diffuse_image_data =
+            stbi_load(diffuse_path.string().c_str(), &diffuse_width, &diffuse_height, nullptr, 4);
+        if (!diffuse_image_data)
         {
             spdlog::error("App::load_scene: failed to load image file `{}`", diffuse_path.string());
             return false;
         }
 
+        int normal_width, normal_height;
+        uint8_t *normal_image_data =
+            stbi_load(normal_path.string().c_str(), &normal_width, &normal_height, nullptr, 4);
+        if (!normal_image_data)
+        {
+            spdlog::error("App::load_scene: failed to load image file `{}`", normal_path.string());
+            return false;
+        }
+
         Material material;
-        if (!m_renderer.create_material(material, mat_idx, image_data, width, height))
+        if (!m_renderer.create_material(
+                material,
+                mat_idx,
+                diffuse_image_data,
+                diffuse_width,
+                diffuse_height,
+                normal_image_data,
+                normal_width,
+                normal_height
+            ))
         {
             spdlog::error("App::load_scene: failed to create material #{}", mat_idx);
             return false;
@@ -227,6 +262,18 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
                         ai_mesh->mNormals[vertex_idx].x,
                         ai_mesh->mNormals[vertex_idx].y,
                         ai_mesh->mNormals[vertex_idx].z,
+                    },
+                .tangent =
+                    {
+                        ai_mesh->mTangents[vertex_idx].x,
+                        ai_mesh->mTangents[vertex_idx].y,
+                        ai_mesh->mTangents[vertex_idx].z,
+                    },
+                .bitangent =
+                    {
+                        ai_mesh->mBitangents[vertex_idx].x,
+                        ai_mesh->mBitangents[vertex_idx].y,
+                        ai_mesh->mBitangents[vertex_idx].z,
                     },
                 .tex_coords =
                     {
