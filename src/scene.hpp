@@ -55,6 +55,7 @@ struct Material
 {
     ComPtr<ID3D12Resource> diffuse;
     ComPtr<ID3D12Resource> normal;
+    ComPtr<ID3D12Resource> metalness_roughness;
 };
 
 struct Object

@@ -10,6 +10,8 @@ class ForwardPass
 {
     struct ConstantBuffer
     {
+        glm::vec3 eye;
+        uint32_t padding0{0};
         glm::mat4 model;
         glm::mat4 proj_view;
         glm::mat4 light_proj_view;
@@ -18,7 +20,7 @@ class ForwardPass
         float ambient;
         glm::vec3 sun_color;
 
-        uint32_t padding0{0};
+        uint32_t padding1{0};
     };
 
     static_assert(

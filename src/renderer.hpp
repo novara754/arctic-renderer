@@ -57,7 +57,9 @@ class Renderer
 
     [[nodiscard]] bool create_material(
         Material &out_material, size_t material_idx, void *diffuse_data, uint32_t diffuse_width,
-        uint32_t diffuse_height, void *normal_data, uint32_t normal_width, uint32_t normal_height
+        uint32_t diffuse_height, void *normal_data, uint32_t normal_width, uint32_t normal_height,
+        void *metalness_roughness_data, uint32_t metalness_roughness_width,
+        uint32_t metalness_roughness_height
     );
 
     [[nodiscard]] bool flush()

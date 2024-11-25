@@ -172,6 +172,7 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
 
         std::filesystem::path diffuse_path = path;
         std::filesystem::path normal_path = path;
+        std::filesystem::path metalness_roughness_path = path;
 
         const aiMaterial *ai_material = scene->mMaterials[mat_idx];
         if (ai_material->GetTextureCount(aiTextureType_DIFFUSE) > 0)
@@ -201,7 +202,22 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
                 "App::load_scene: material #{} missing normal texture, using fallback",
                 mat_idx
             );
-            normal_path = "./assets/white.png";
+            normal_path = "./assets/normal.png";
+        }
+
+        if (ai_material->GetTextureCount(aiTextureType_METALNESS) > 0)
+        {
+            aiString metalness_roughness_name;
+            ai_material->GetTexture(aiTextureType_METALNESS, 0, &metalness_roughness_name);
+            metalness_roughness_path.replace_filename(metalness_roughness_name.C_Str());
+        }
+        else
+        {
+            spdlog::warn(
+                "App::load_scene: material #{} missing metalness/roughness texture, using fallback",
+                mat_idx
+            );
+            metalness_roughness_path = "./assets/white.png";
         }
 
         int diffuse_width, diffuse_height;
@@ -222,6 +238,23 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
             return false;
         }
 
+        int metalness_roughness_width, metalness_roughness_height;
+        uint8_t *metalness_roughness_image_data = stbi_load(
+            metalness_roughness_path.string().c_str(),
+            &metalness_roughness_width,
+            &metalness_roughness_height,
+            nullptr,
+            4
+        );
+        if (!metalness_roughness_image_data)
+        {
+            spdlog::error(
+                "App::load_scene: failed to load image file `{}`",
+                metalness_roughness_path.string()
+            );
+            return false;
+        }
+
         Material material;
         if (!m_renderer.create_material(
                 material,
@@ -231,7 +264,10 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
                 diffuse_height,
                 normal_image_data,
                 normal_width,
-                normal_height
+                normal_height,
+                metalness_roughness_image_data,
+                metalness_roughness_width,
+                metalness_roughness_height
             ))
         {
             spdlog::error("App::load_scene: failed to create material #{}", mat_idx);

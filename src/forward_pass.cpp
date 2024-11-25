@@ -135,7 +135,7 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     shadow_map_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
     CD3DX12_DESCRIPTOR_RANGE material_range;
-    material_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 1, 0, 1);
+    material_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 1, 0, 1);
 
     std::array<CD3DX12_ROOT_PARAMETER, 3> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
@@ -288,6 +288,7 @@ bool ForwardPass::resize(uint32_t new_width, uint32_t new_height)
 void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
 {
     ConstantBuffer constants{
+        .eye = scene.camera.eye,
         .proj_view = scene.camera.proj_view_matrix(),
         .light_proj_view = scene.sun.proj_view_matrix(),
         .sun_dir = scene.sun.direction(),
@@ -338,7 +339,7 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE material_srv_handle(
             m_srv_heap->GetGPUDescriptorHandleForHeapStart(),
-            static_cast<INT>(mesh.material_idx * 2),
+            static_cast<INT>(mesh.material_idx * 3),
             m_srv_descriptor_size
         );
         cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
