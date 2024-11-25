@@ -52,7 +52,7 @@ float calculate_shadow(float3 normal, float4 light_space_position)
 		return 0.0;
 	}
 
-	float bias = max(0.05 * (1.0 - dot(normal, sun_dir)), 0.005);
+	float bias = 0.0; // max(0.05 * (1.0 - dot(normal, sun_dir)), 0.005);
 	float current_depth = proj_coords.z;
 	float shadow = 0.0;
 	for (int i = -2; i <= 2; ++i)
