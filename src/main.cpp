@@ -25,8 +25,7 @@ int main(int argc, char **argv)
     }
     spdlog::trace("main: initialized sdl video and audio subsystem");
 
-    SDL_Window *window =
-        SDL_CreateWindow("Arctic", App::WINDOW_WIDTH, App::WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
+    SDL_Window *window = SDL_CreateWindow("Arctic", App::WINDOW_WIDTH, App::WINDOW_HEIGHT, 0);
     if (!window)
     {
         spdlog::error("main: failed to create window: {}", SDL_GetError());
