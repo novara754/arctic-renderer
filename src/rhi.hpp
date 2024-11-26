@@ -92,9 +92,6 @@ class RHI
         ComPtr<ID3D12Resource> &out_texture, D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
     );
 
-    [[nodiscard]] bool
-    create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture);
-
     [[nodiscard]] bool upload_to_buffer(
         ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
         uint64_t src_data_size

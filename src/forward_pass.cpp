@@ -9,45 +9,8 @@
 
 #define CONSTANTS_SIZE(ty) ((sizeof(ty) + 3) / 4)
 
-bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_map)
+bool ForwardPass::init()
 {
-    m_output_size.width = width;
-    m_output_size.height = height;
-
-    if (!m_rhi->create_descriptor_heap(
-            D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            1,
-            D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            m_rtv_heap
-        ))
-    {
-        spdlog::error("ForwardPass::init: failed to create rtv descriptor heap");
-        return false;
-    }
-    spdlog::trace("ForwardPass::init: created rtv descriptor heap");
-
-    if (!m_rhi->create_texture(
-            width,
-            height,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            m_color_target,
-            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-        ))
-    {
-        spdlog::error("ForwardPass::init: failed to create color target texture");
-        return false;
-    }
-
-    m_rhi->device()->CreateRenderTargetView(
-        m_color_target.Get(),
-        nullptr,
-        m_rtv_heap->GetCPUDescriptorHandleForHeapStart()
-    );
-
-    // ------------
-    // Read and compile shaders
-    // -------
     ComPtr<ID3DBlob> vs_code, ps_code;
     if (!compile_shader(L"./shaders/forward.hlsl", "vs_main", "vs_5_0", &vs_code))
     {
@@ -61,86 +24,22 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     }
     spdlog::trace("ForwardPass::init: compiled forward shaders");
 
-    // ------------
-    // Create depth texture and DSV heap
-    // -------
-    {
-        if (!m_rhi->create_depth_texture(width, height, m_depth_texture))
-        {
-            spdlog::error("ForwardPass::init: failed to create depth texture");
-            return false;
-        }
-
-        if (!m_rhi->create_descriptor_heap(
-                D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-                1,
-                D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-                m_dsv_heap
-            ))
-        {
-            spdlog::error("ForwardPass::init: failed to create dsv descriptor heap");
-            return false;
-        }
-        spdlog::trace("ForwardPass::init: created dsv descriptor heap");
-
-        m_dsv_descriptor_size =
-            m_rhi->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-
-        m_rhi->device()->CreateDepthStencilView(
-            m_depth_texture.Get(),
-            nullptr,
-            m_dsv_heap->GetCPUDescriptorHandleForHeapStart()
-        );
-    }
-
-    // ------------
-    // Create SRV heap
-    // -------
-    {
-        if (!m_rhi->create_descriptor_heap(
-                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                128,
-                D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                m_srv_heap
-            ))
-        {
-            spdlog::error("ForwardPass::init: failed to create srv descriptor heap");
-            return false;
-        }
-        spdlog::trace("ForwardPass::init: created srv descriptor heap");
-
-        m_srv_descriptor_size =
-            m_rhi->device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
-            );
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC shadow_map_srv_desc{};
-        shadow_map_srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        shadow_map_srv_desc.Format = DXGI_FORMAT_R32_FLOAT;
-        shadow_map_srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        shadow_map_srv_desc.Texture2D.MipLevels = 1;
-        m_rhi->device()->CreateShaderResourceView(
-            shadow_map,
-            &shadow_map_srv_desc,
-            m_srv_heap->GetCPUDescriptorHandleForHeapStart()
-        );
-    }
-
-    // ------------
-    // Create root signature
-    // -------
     ComPtr<ID3DBlob> root_signature;
     ComPtr<ID3DBlob> error;
 
-    CD3DX12_DESCRIPTOR_RANGE shadow_map_range;
-    shadow_map_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    std::array<CD3DX12_DESCRIPTOR_RANGE, 2> descriptor_ranges{};
+    // 1 shadow map
+    descriptor_ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    // 3 material textures
+    descriptor_ranges[1]
+        .Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 
-    CD3DX12_DESCRIPTOR_RANGE material_range;
-    material_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 1, 0, 1);
-
-    std::array<CD3DX12_ROOT_PARAMETER, 3> root_parameters{};
+    std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
-    root_parameters[1].InitAsDescriptorTable(1, &shadow_map_range);
-    root_parameters[2].InitAsDescriptorTable(1, &material_range);
+    root_parameters[1].InitAsDescriptorTable(
+        static_cast<uint32_t>(descriptor_ranges.size()),
+        descriptor_ranges.data()
+    );
 
     D3D12_STATIC_SAMPLER_DESC sampler{};
     sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -264,28 +163,11 @@ bool ForwardPass::init(uint32_t width, uint32_t height, ID3D12Resource *shadow_m
     return true;
 }
 
-bool ForwardPass::resize(uint32_t new_width, uint32_t new_height)
-{
-    m_depth_texture.Reset();
-    if (!m_rhi->create_depth_texture(new_width, new_height, m_depth_texture))
-    {
-        spdlog::error("ForwardPass::resize: failed to create depth texture");
-        return false;
-    }
-
-    m_rhi->device()->CreateDepthStencilView(
-        m_depth_texture.Get(),
-        nullptr,
-        m_dsv_heap->GetCPUDescriptorHandleForHeapStart()
-    );
-
-    m_output_size.width = new_width;
-    m_output_size.height = new_height;
-
-    return true;
-}
-
-void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
+void ForwardPass::run(
+    ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE color_target_rtv,
+    D3D12_CPU_DESCRIPTOR_HANDLE depth_target_dsv, D3D12_GPU_DESCRIPTOR_HANDLE srv_base_handle,
+    uint32_t srv_descriptor_size, uint32_t width, uint32_t height, const Scene &scene
+)
 {
     ConstantBuffer constants{
         .eye = scene.camera.eye,
@@ -296,30 +178,20 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
         .sun_color = scene.sun.color,
     };
 
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = m_rtv_heap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_heap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE shadow_map_srv_handle =
-        m_srv_heap->GetGPUDescriptorHandleForHeapStart();
-
     std::array<float, 4> clear_color{0.0f, 0.0f, 0.0f, 1.0f};
-    cmd_list->ClearRenderTargetView(rtv_handle, clear_color.data(), 0, nullptr);
-    cmd_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    cmd_list->ClearRenderTargetView(color_target_rtv, clear_color.data(), 0, nullptr);
+    cmd_list->ClearDepthStencilView(depth_target_dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     cmd_list->SetGraphicsRootSignature(m_root_signature.Get());
-    std::array heaps{m_srv_heap.Get()};
-    cmd_list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
     cmd_list->SetPipelineState(m_pipeline.Get());
-    cmd_list->SetGraphicsRootDescriptorTable(1, shadow_map_srv_handle);
-
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    cmd_list->OMSetRenderTargets(1, &rtv_handle, FALSE, &dsv_handle);
+    cmd_list->OMSetRenderTargets(1, &color_target_rtv, FALSE, &depth_target_dsv);
 
     D3D12_VIEWPORT viewport{
         .TopLeftX = 0.0f,
         .TopLeftY = 0.0f,
-        .Width = static_cast<float>(m_output_size.width),
-        .Height = static_cast<float>(m_output_size.height),
+        .Width = static_cast<float>(width),
+        .Height = static_cast<float>(height),
         .MinDepth = 0.0f,
         .MaxDepth = 1.0f,
     };
@@ -327,8 +199,8 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
     D3D12_RECT scissor{
         .left = 0,
         .top = 0,
-        .right = static_cast<long>(m_output_size.width),
-        .bottom = static_cast<long>(m_output_size.height),
+        .right = static_cast<long>(width),
+        .bottom = static_cast<long>(height),
     };
     cmd_list->RSSetScissorRects(1, &scissor);
 
@@ -337,30 +209,15 @@ void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
         const Mesh &mesh = scene.meshes[obj.mesh_idx];
         constants.model = obj.trs;
 
-        CD3DX12_GPU_DESCRIPTOR_HANDLE material_srv_handle(
-            m_srv_heap->GetGPUDescriptorHandleForHeapStart(),
-            static_cast<INT>(mesh.material_idx * 3),
-            m_srv_descriptor_size
+        CD3DX12_GPU_DESCRIPTOR_HANDLE srv_handle(
+            srv_base_handle,
+            static_cast<INT>(mesh.material_idx * 4),
+            srv_descriptor_size
         );
         cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
-        cmd_list->SetGraphicsRootDescriptorTable(2, material_srv_handle);
+        cmd_list->SetGraphicsRootDescriptorTable(1, srv_handle);
         cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
         cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
         cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
     }
-}
-
-void ForwardPass::create_srv_tex2d(int32_t index, ID3D12Resource *resource, DXGI_FORMAT format)
-{
-    CD3DX12_CPU_DESCRIPTOR_HANDLE srv_handle(
-        m_srv_heap->GetCPUDescriptorHandleForHeapStart(),
-        index + 1,
-        m_srv_descriptor_size
-    );
-    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv_desc.Format = format;
-    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srv_desc.Texture2D.MipLevels = 1;
-    m_rhi->device()->CreateShaderResourceView(resource, &srv_desc, srv_handle);
 }

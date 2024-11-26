@@ -527,29 +527,6 @@ bool RHI::create_texture(
     return true;
 }
 
-bool RHI::create_depth_texture(uint64_t width, uint32_t height, ComPtr<ID3D12Resource> &out_texture)
-{
-    CD3DX12_HEAP_PROPERTIES heap_props(D3D12_HEAP_TYPE_DEFAULT);
-    CD3DX12_RESOURCE_DESC resource_desc =
-        CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, width, height);
-    resource_desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-    resource_desc.MipLevels = 1;
-    CD3DX12_CLEAR_VALUE clear_value(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
-    DXERR(
-        m_device->CreateCommittedResource(
-            &heap_props,
-            D3D12_HEAP_FLAG_NONE,
-            &resource_desc,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE,
-            &clear_value,
-            IID_PPV_ARGS(&out_texture)
-        ),
-        "RHI::create_depth_texture: failed to create depth texture"
-    );
-
-    return true;
-}
-
 bool RHI::upload_to_buffer(
     ID3D12Resource *dst_buffer, D3D12_RESOURCE_STATES dst_buffer_state, void *src_data,
     uint64_t src_data_size

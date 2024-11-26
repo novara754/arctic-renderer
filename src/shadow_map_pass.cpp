@@ -21,40 +21,6 @@ bool ShadowMapPass::init()
     }
     spdlog::trace("ShadowMapPass::init: compiled depth shader");
 
-    if (!m_rhi->create_texture(
-            SIZE,
-            SIZE,
-            DXGI_FORMAT_R32_TYPELESS,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE,
-            m_depth_texture,
-            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-        ))
-    {
-        spdlog::error("ShadowMapPass::init: failed to create depth texture");
-        return false;
-    }
-
-    if (!m_rhi->create_descriptor_heap(
-            D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-            1,
-            D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            m_dsv_heap
-        ))
-    {
-        spdlog::error("ShadowMapPass::init: failed to create dsv descriptor heap");
-        return false;
-    }
-    spdlog::trace("ShadowMapPass::init: created dsv descriptor heap");
-
-    D3D12_DEPTH_STENCIL_VIEW_DESC shadow_map_dsv{};
-    shadow_map_dsv.Format = DXGI_FORMAT_D32_FLOAT;
-    shadow_map_dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-    m_rhi->device()->CreateDepthStencilView(
-        m_depth_texture.Get(),
-        &shadow_map_dsv,
-        m_dsv_heap->GetCPUDescriptorHandleForHeapStart()
-    );
-
     ComPtr<ID3DBlob> root_signature;
 
     std::array<CD3DX12_ROOT_PARAMETER, 1> root_parameters{};
@@ -141,22 +107,22 @@ bool ShadowMapPass::init()
     return true;
 }
 
-void ShadowMapPass::run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene)
+void ShadowMapPass::run(
+    ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE shadow_map, const Scene &scene
+)
 {
     ConstantBuffer constants{
         .proj_view = scene.sun.proj_view_matrix(),
     };
 
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = m_dsv_heap->GetCPUDescriptorHandleForHeapStart();
-
-    cmd_list->ClearDepthStencilView(dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    cmd_list->ClearDepthStencilView(shadow_map, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     cmd_list->SetGraphicsRootSignature(m_root_signature.Get());
     cmd_list->SetPipelineState(m_pipeline.Get());
 
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    cmd_list->OMSetRenderTargets(0, nullptr, FALSE, &dsv_handle);
+    cmd_list->OMSetRenderTargets(0, nullptr, FALSE, &shadow_map);
 
     D3D12_VIEWPORT viewport{
         .TopLeftX = 0.0f,

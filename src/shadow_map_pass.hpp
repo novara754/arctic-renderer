@@ -14,8 +14,10 @@ class ShadowMapPass
         glm::mat4 proj_view;
     };
 
+  public:
     static constexpr uint32_t SIZE = 4000;
 
+  private:
     RHI *m_rhi;
 
     ComPtr<ID3D12DescriptorHeap> m_dsv_heap;
@@ -35,12 +37,9 @@ class ShadowMapPass
     {
     }
 
-    [[nodiscard]] ID3D12Resource *shadow_map()
-    {
-        return m_depth_texture.Get();
-    }
-
     [[nodiscard]] bool init();
 
-    void run(ID3D12GraphicsCommandList *cmd_list, const Scene &scene);
+    void
+    run(ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE shadow_map,
+        const Scene &scene);
 };

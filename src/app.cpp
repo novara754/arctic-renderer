@@ -258,7 +258,6 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
         Material material;
         if (!m_renderer.create_material(
                 material,
-                mat_idx,
                 diffuse_image_data,
                 diffuse_width,
                 diffuse_height,

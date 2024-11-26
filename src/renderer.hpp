@@ -25,11 +25,39 @@ class Renderer
     } m_window_size;
 
     RHI m_rhi;
-    ShadowMapPass m_shadow_map_pass;
-    ForwardPass m_forward_pass;
-    PostProcessPass m_post_process_pass;
 
     ComPtr<ID3D12DescriptorHeap> m_imgui_cbv_srv_heap;
+
+    ComPtr<ID3D12DescriptorHeap> m_rtv_heap;
+    uint32_t m_rtv_descriptor_size{0};
+    uint32_t m_rtv_count{0};
+
+    ComPtr<ID3D12DescriptorHeap> m_dsv_heap;
+    uint32_t m_dsv_descriptor_size{0};
+    uint32_t m_dsv_count{0};
+
+    ComPtr<ID3D12DescriptorHeap> m_cbv_srv_uav_heap;
+    uint32_t m_cbv_srv_uav_descriptor_size{0};
+    uint32_t m_cbv_srv_uav_count{0};
+
+    ComPtr<ID3D12Resource> m_sun_shadow_map;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_sun_shadow_map_dsv;
+
+    ComPtr<ID3D12Resource> m_forward_color_target;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_forward_color_target_rtv;
+
+    ComPtr<ID3D12Resource> m_forward_depth_target;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_forward_depth_target_dsv;
+
+    ComPtr<ID3D12Resource> m_post_process_output;
+
+    ShadowMapPass m_shadow_map_pass;
+
+    ForwardPass m_forward_pass;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_forward_descriptors_base_handle;
+
+    PostProcessPass m_post_process_pass;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_post_process_descriptors_base_handle;
 
     Renderer() = delete;
     Renderer(const Renderer &) = delete;
@@ -56,8 +84,8 @@ class Renderer
     );
 
     [[nodiscard]] bool create_material(
-        Material &out_material, size_t material_idx, void *diffuse_data, uint32_t diffuse_width,
-        uint32_t diffuse_height, void *normal_data, uint32_t normal_width, uint32_t normal_height,
+        Material &out_material, void *diffuse_data, uint32_t diffuse_width, uint32_t diffuse_height,
+        void *normal_data, uint32_t normal_width, uint32_t normal_height,
         void *metalness_roughness_data, uint32_t metalness_roughness_width,
         uint32_t metalness_roughness_height
     );
@@ -66,4 +94,14 @@ class Renderer
     {
         return m_rhi.flush();
     }
+
+  private:
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE
+    create_rtv(ID3D12Resource *resource, DXGI_FORMAT format);
+
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE create_dsv(ID3D12Resource *resource);
+
+    D3D12_GPU_DESCRIPTOR_HANDLE create_srv(ID3D12Resource *resource, DXGI_FORMAT format);
+
+    D3D12_GPU_DESCRIPTOR_HANDLE create_uav(ID3D12Resource *resource, DXGI_FORMAT format);
 };
