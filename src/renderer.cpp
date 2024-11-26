@@ -457,8 +457,8 @@ bool Renderer::create_material(
 
     create_srv(m_sun_shadow_map.Get(), DXGI_FORMAT_R32_FLOAT);
     create_srv(out_material.diffuse.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-    create_srv(out_material.normal.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-    create_srv(out_material.metalness_roughness.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    create_srv(out_material.normal.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    create_srv(out_material.metalness_roughness.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
 
     return true;
 }
