@@ -7,12 +7,14 @@ A custom render engine written from scratch using DirectX 12.
 
 ## Features
 - [x] PBR forward render pipeline
-- [ ] IBL with skybox
 - [x] Global directional light with shadow map
+- [x] Configurable point lights (no shadows yet)
 - [x] Load scene (meshes, textures) from glTF or similar formats
 - [x] HDR tonemapping (Reinhard, simple exposure, ACES approximation)
 - [x] Configurable gamma correction
-- [ ] Point/spotlights
+- [ ] IBL with skybox
+- [ ] Spotlights
+- [ ] Point light shadows
 - [ ] More complex light/scene editor
 - [ ] Raytracing
 

@@ -15,6 +15,18 @@ Texture2D t_shadow_map : register(t0);
 Texture2D t_textures[3] : register(t1);
 SamplerState s_sampler : register(s0);
 
+struct PointLight
+{
+	float3 position;
+	float3 color;
+};
+
+cbuffer Lights : register(b1)
+{
+	uint point_lights_len;
+	PointLight point_lights[16];
+}
+
 struct VSIn
 {
 	float3 position : POSITION;
@@ -154,18 +166,8 @@ float3 brdf_cook_torrance(float3 n, float3 h, float3 wo, float3 wi, float roughn
 	return num / denom;
 }
 
-float4 ps_main(VSOut vs_out) : SV_TARGET
+float3 calculate_outgoing_radiance(float3 n, float3 wo, float3 wi, float3 ingoing_radiance, float3 base_color, float metalness, float roughness)
 {
-	float3 base_color = get_base_color(vs_out.tex_coords);
-	float3 n = get_normal(vs_out.tex_coords, vs_out.tbn);
-	float metalness = get_metalness(vs_out.tex_coords);
-	float roughness = get_roughness(vs_out.tex_coords);
-
-	float shadow = calculate_shadow(n, vs_out.light_space_position);
-
-	float3 radiance = sun_color;
-	float3 wi = -sun_dir;
-	float3 wo = normalize(eye - vs_out.world_position);
 	float3 h = normalize(wo + wi);
 
 	float3 F0 = float3(0.04, 0.04, 0.04);
@@ -179,8 +181,32 @@ float4 ps_main(VSOut vs_out) : SV_TARGET
 	kD *= 1.0 - metalness;
 
 	float n_dot_wi = max(dot(n, wi), 0.0);
-	float3 Lo = (kD * base_color / PI + specular) * radiance * n_dot_wi;
+	return (kD * base_color / PI + specular) * ingoing_radiance * n_dot_wi;
+}
 
-	float3 color = (1.0 - shadow) * Lo + ambient * base_color;
+float4 ps_main(VSOut vs_out) : SV_TARGET
+{
+	float3 base_color = get_base_color(vs_out.tex_coords);
+	float3 n = get_normal(vs_out.tex_coords, vs_out.tbn);
+	float metalness = get_metalness(vs_out.tex_coords);
+	float roughness = get_roughness(vs_out.tex_coords);
+
+	float3 wo = normalize(eye - vs_out.world_position);
+	float3 Lo = float3(0.0, 0.0, 0.0);
+
+	/* Sun */
+	float shadow = calculate_shadow(n, vs_out.light_space_position);
+	Lo += (1.0 - shadow) * calculate_outgoing_radiance(n, wo, -sun_dir, sun_color, base_color, metalness, roughness);
+
+	for (uint i = 0; i < point_lights_len; ++i)
+	{
+		float3 light_dir = point_lights[i].position - vs_out.world_position;
+		float dist = length(light_dir);
+		float3 wi = light_dir / dist;
+		float3 radiance = point_lights[i].color / (dist * dist);
+		Lo += (1.0 - shadow) * calculate_outgoing_radiance(n, wo, wi, radiance, base_color, metalness, roughness);
+	}
+
+	float3 color = Lo + ambient * base_color;
 	return float4(color, 1.0);
 }
