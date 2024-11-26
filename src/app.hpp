@@ -35,6 +35,7 @@ class App
     float m_mouse_sensitivity{0.5f};
 
     std::filesystem::path m_scene_path;
+    bool m_update_lights{true};
     Scene m_scene{
         .camera{
             .eye = {0.0f, 5.0f, 0.0f},
@@ -48,6 +49,12 @@ class App
             .position = {-10.0f, 32.0f, -2.48f},
             .rotation = {-70.0f, 12.0f},
             .color = {8.0f, 8.0f, 8.0f},
+        },
+        .point_lights{
+            PointLight{
+                .position = {0.0f, 1.0f, 0.0f},
+                .color = {10.0f, 0.0f, 0.0f},
+            },
         },
         .meshes{},
         .objects{},

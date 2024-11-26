@@ -27,12 +27,15 @@ bool ForwardPass::init()
     ComPtr<ID3DBlob> root_signature;
     ComPtr<ID3DBlob> error;
 
-    std::array<CD3DX12_DESCRIPTOR_RANGE, 2> descriptor_ranges{};
+    std::array<CD3DX12_DESCRIPTOR_RANGE, 3> descriptor_ranges{};
     // 1 shadow map
-    descriptor_ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    descriptor_ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0);
     // 3 material textures
     descriptor_ranges[1]
         .Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
+    // 1 lights buffer
+    descriptor_ranges[2]
+        .Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 
     std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
@@ -211,7 +214,7 @@ void ForwardPass::run(
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE srv_handle(
             srv_base_handle,
-            static_cast<INT>(mesh.material_idx * 4),
+            static_cast<INT>(mesh.material_idx * 5),
             srv_descriptor_size
         );
         cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);

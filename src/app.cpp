@@ -12,6 +12,8 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 
@@ -154,6 +156,13 @@ void App::update()
     eye += m_camera_speed * m_delta_time * fwd_input * forward;
     eye += m_camera_speed * m_delta_time * up_input * up;
     eye += m_camera_speed * m_delta_time * right_input * right;
+
+    if (m_update_lights)
+    {
+        spdlog::debug("App::update: updating lights buffer");
+        m_renderer.update_lights(m_scene.point_lights);
+        m_update_lights = false;
+    }
 }
 
 bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
@@ -445,18 +454,30 @@ void App::build_ui()
         ImGui::SeparatorText("Camera");
         ImGui::SliderFloat("Speed", &m_camera_speed, 0.1f, 5000.0f);
         ImGui::SliderFloat("Sensitivity", &m_mouse_sensitivity, 0.01f, 2.0f);
-        ImGui::DragFloat3("Position", &m_scene.camera.eye.x, 0.1f);
-        ImGui::DragFloat2("Rotation", &m_scene.camera.rotation.x, 0.1f, -360.0f, 360.0f);
+        ImGui::DragFloat3("Position", glm::value_ptr(m_scene.camera.eye), 0.1f);
+        ImGui::DragFloat2(
+            "Rotation",
+            glm::value_ptr(m_scene.camera.rotation),
+            0.1f,
+            -360.0f,
+            360.0f
+        );
         ImGui::DragFloat2("Z Near/Far", m_scene.camera.z_near_far.data(), 0.01f, 0.001f, 10000.0f);
 
         ImGui::SeparatorText("Light");
         ImGui::SliderFloat("Ambient", &m_scene.ambient, 0.0f, 1.0f);
-        ImGui::DragFloat3("Sun Position", &m_scene.sun.position.x);
-        ImGui::DragFloat2("Sun Rotation", &m_scene.sun.rotation.x, 0.1f, -360.0f, 360.0f);
-        ImGui::ColorPicker3(
+        ImGui::DragFloat3("Sun Position", glm::value_ptr(m_scene.sun.position));
+        ImGui::DragFloat2(
+            "Sun Rotation",
+            glm::value_ptr(m_scene.sun.rotation),
+            0.1f,
+            -360.0f,
+            360.0f
+        );
+        ImGui::ColorEdit3(
             "Sun Color",
-            &m_scene.sun.color.x,
-            ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_PickerHueWheel
+            glm::value_ptr(m_scene.sun.color),
+            ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float | ImGuiColorEditFlags_PickerHueWheel
         );
 
         ImGui::SeparatorText("Post Processing");
@@ -465,6 +486,36 @@ void App::build_ui()
         if (m_settings.tm_method == 1)
         {
             ImGui::DragFloat("Exposure", &m_settings.exposure, 0.1f, 0.0f, 10.0f);
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Lights", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        for (PointLight &light : m_scene.point_lights)
+        {
+            ImGui::PushID(&light);
+            ImGui::Separator();
+            m_update_lights |= ImGui::DragFloat3("Position", glm::value_ptr(light.position), 0.1f);
+            m_update_lights |= ImGui::ColorEdit3(
+                "Color",
+                glm::value_ptr(light.color),
+                ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float |
+                    ImGuiColorEditFlags_PickerHueWheel
+            );
+            ImGui::PopID();
+        }
+
+        if (m_scene.point_lights.size() < Renderer::MAX_NUM_POINT_LIGHTS)
+        {
+            if (ImGui::Button("Add"))
+            {
+                m_scene.point_lights.emplace_back(PointLight{
+                    .position{0.0f, 0.0f, 0.0f},
+                    .color{10.0f, 10.0f, 10.0f},
+                });
+                m_update_lights = true;
+            }
         }
     }
     ImGui::End();

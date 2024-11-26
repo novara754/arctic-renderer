@@ -9,6 +9,8 @@
 
 #include "implot.h"
 
+#include "util.hpp"
+
 bool Renderer::init()
 {
     if (!m_rhi.init(m_window, m_window_size.width, m_window_size.height))
@@ -55,6 +57,31 @@ bool Renderer::init()
     }
     m_cbv_srv_uav_descriptor_size =
         m_rhi.device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    if (!m_rhi.create_buffer(
+            next_multiple_of_k(
+                sizeof(LightsBuffer),
+                D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
+            ),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            D3D12_HEAP_TYPE_DEFAULT,
+            m_lights_buffer
+        ))
+    {
+        spdlog::error("Renderer::init: failed to create point lights buffer");
+        return false;
+    }
+    m_lights_buffer->SetName(L"lights buffer");
+    if (!m_rhi.upload_to_buffer(
+            m_lights_buffer.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            &m_lights_buffer_data,
+            sizeof(LightsBuffer)
+        ))
+    {
+        spdlog::error("Renderer::init: failed to initialize point lights buffer");
+        return false;
+    }
 
     if (!m_rhi.create_texture(
             ShadowMapPass::SIZE,
@@ -459,8 +486,29 @@ bool Renderer::create_material(
     create_srv(out_material.diffuse.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
     create_srv(out_material.normal.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
     create_srv(out_material.metalness_roughness.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    create_cbv(m_lights_buffer.Get());
 
     return true;
+}
+
+void Renderer::update_lights(std::span<PointLight> point_lights)
+{
+    m_lights_buffer_data.point_lights_len =
+        static_cast<uint32_t>(std::min(MAX_NUM_POINT_LIGHTS, point_lights.size()));
+    for (size_t i = 0; i < m_lights_buffer_data.point_lights_len; ++i)
+    {
+        m_lights_buffer_data.point_lights[i] = point_lights[i];
+    }
+
+    if (!m_rhi.upload_to_buffer(
+            m_lights_buffer.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            &m_lights_buffer_data,
+            sizeof(LightsBuffer)
+        ))
+    {
+        spdlog::error("Renderer::update_lights: upload failed");
+    }
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE
@@ -541,6 +589,28 @@ D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_uav(ID3D12Resource *resource, DXGI_
     desc.Texture2D.MipSlice = 0;
     desc.Texture2D.PlaneSlice = 0;
     m_rhi.device()->CreateUnorderedAccessView(resource, nullptr, &desc, handle);
+
+    ++m_cbv_srv_uav_count;
+
+    return CD3DX12_GPU_DESCRIPTOR_HANDLE(
+        m_cbv_srv_uav_heap->GetGPUDescriptorHandleForHeapStart(),
+        m_cbv_srv_uav_count - 1,
+        m_cbv_srv_uav_descriptor_size
+    );
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_cbv(ID3D12Resource *resource)
+{
+    CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
+        m_cbv_srv_uav_heap->GetCPUDescriptorHandleForHeapStart(),
+        m_cbv_srv_uav_count,
+        m_cbv_srv_uav_descriptor_size
+    );
+    D3D12_CONSTANT_BUFFER_VIEW_DESC desc{};
+    desc.BufferLocation = resource->GetGPUVirtualAddress();
+    desc.SizeInBytes =
+        next_multiple_of_k(sizeof(LightsBuffer), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    m_rhi.device()->CreateConstantBufferView(&desc, handle);
 
     ++m_cbv_srv_uav_count;
 

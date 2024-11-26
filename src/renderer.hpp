@@ -14,6 +14,17 @@
 
 class Renderer
 {
+  public:
+    static constexpr size_t MAX_NUM_POINT_LIGHTS = 16;
+
+  private:
+    struct LightsBuffer
+    {
+        uint32_t point_lights_len{0};
+        uint32_t padding0[3]{};
+        PointLight point_lights[Renderer::MAX_NUM_POINT_LIGHTS];
+    };
+
     SDL_Window *m_window;
 
     struct
@@ -36,6 +47,9 @@ class Renderer
     ComPtr<ID3D12DescriptorHeap> m_cbv_srv_uav_heap;
     uint32_t m_cbv_srv_uav_descriptor_size{0};
     uint32_t m_cbv_srv_uav_count{0};
+
+    LightsBuffer m_lights_buffer_data;
+    ComPtr<ID3D12Resource> m_lights_buffer;
 
     ComPtr<ID3D12Resource> m_sun_shadow_map;
     D3D12_CPU_DESCRIPTOR_HANDLE m_sun_shadow_map_dsv;
@@ -89,6 +103,8 @@ class Renderer
         uint32_t metalness_roughness_height
     );
 
+    void update_lights(std::span<PointLight> point_lights);
+
     [[nodiscard]] bool flush()
     {
         return m_rhi.flush();
@@ -103,4 +119,6 @@ class Renderer
     D3D12_GPU_DESCRIPTOR_HANDLE create_srv(ID3D12Resource *resource, DXGI_FORMAT format);
 
     D3D12_GPU_DESCRIPTOR_HANDLE create_uav(ID3D12Resource *resource, DXGI_FORMAT format);
+
+    D3D12_GPU_DESCRIPTOR_HANDLE create_cbv(ID3D12Resource *resource);
 };

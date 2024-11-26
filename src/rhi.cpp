@@ -534,7 +534,7 @@ bool RHI::upload_to_buffer(
 {
     ComPtr<ID3D12Resource> staging_buffer;
     if (!create_buffer(
-            src_data_size,
+            GetRequiredIntermediateSize(dst_buffer, 0, 1),
             D3D12_RESOURCE_STATE_GENERIC_READ,
             D3D12_HEAP_TYPE_UPLOAD,
             staging_buffer

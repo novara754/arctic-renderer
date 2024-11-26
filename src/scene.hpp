@@ -75,11 +75,20 @@ struct DirectionalLight
     [[nodiscard]] glm::mat4 proj_view_matrix() const;
 };
 
+struct PointLight
+{
+    glm::vec3 position;
+    uint32_t padding0{0};
+    glm::vec3 color;
+    uint32_t padding1{0};
+};
+
 struct Scene
 {
     Camera camera;
     float ambient;
     DirectionalLight sun;
+    std::vector<PointLight> point_lights;
     std::vector<Mesh> meshes;
     std::vector<Material> materials;
     std::vector<Object> objects;
