@@ -2,6 +2,7 @@
 
 #include <array>
 #include <chrono>
+#include <deque>
 #include <filesystem>
 
 #include <SDL3/SDL_events.h>
@@ -17,10 +18,14 @@ class App
     static constexpr uint32_t WINDOW_HEIGHT = 720;
 
   private:
+    static constexpr int FRAME_TIME_HISTORY_SIZE = 1000;
+
     Renderer m_renderer;
 
     std::chrono::high_resolution_clock::time_point m_last_frame_time;
     float m_delta_time;
+    std::deque<float> m_frame_time_history;
+    bool m_show_fps_graph{false};
 
     struct
     {

@@ -13,6 +13,9 @@
 #include <assimp/scene.h>
 
 #include "imgui.h"
+#include "imgui_impl_sdl3.h"
+
+#include "implot.h"
 
 #include "stb_image.h"
 
@@ -46,6 +49,15 @@ void App::run()
         m_delta_time =
             std::chrono::duration<float, std::milli>(now - m_last_frame_time).count() / 1000.0f;
         m_last_frame_time = now;
+
+        if (m_delta_time > 0.0f)
+        {
+            m_frame_time_history.emplace_back(m_delta_time);
+        }
+        if (m_frame_time_history.size() > FRAME_TIME_HISTORY_SIZE)
+        {
+            m_frame_time_history.pop_front();
+        }
 
         SDL_Event event;
         if (SDL_PollEvent(&event))
@@ -84,9 +96,7 @@ void App::run()
         spdlog::error("App::run: flush failed");
     }
 
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
+    m_renderer.cleanup();
 }
 
 void App::handle_event(SDL_Event &event)
@@ -380,11 +390,58 @@ bool App::render_frame()
 
 void App::build_ui()
 {
-    ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    if (ImGui::Begin("Stats"))
     {
-        ImGui::SeparatorText("Stats");
         ImGui::Text("Frame Time: %.2f ms", m_delta_time * 1000.0f);
+        ImGui::Text("FPS: %u", static_cast<uint32_t>(1.0f / m_delta_time));
 
+        ImGui::Checkbox("Show FPS graph", &m_show_fps_graph);
+
+        if (ImPlot::BeginPlot("FPS"))
+        {
+            ImPlot::SetupAxis(ImAxis_X1, nullptr);
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, static_cast<double>(FRAME_TIME_HISTORY_SIZE));
+
+            ImPlot::SetupAxis(ImAxis_Y1, "ms");
+            ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 10.0);
+
+            ImPlot::SetupAxis(ImAxis_Y2, "FPS", ImPlotAxisFlags_Opposite);
+            ImPlot::SetupAxisLimits(ImAxis_Y2, 0.0, 1500.0);
+
+            ImPlot::SetAxis(ImAxis_Y1);
+            ImPlot::PlotLineG(
+                "Frame Time",
+                [](int i, void *data) {
+                    const auto &history = *static_cast<std::deque<float> *>(data);
+                    float y = history[i] * 1000.0f;
+                    return ImPlotPoint(static_cast<double>(i), static_cast<double>(y));
+                },
+                &m_frame_time_history,
+                static_cast<int>(m_frame_time_history.size())
+            );
+
+            if (m_show_fps_graph)
+            {
+                ImPlot::SetAxis(ImAxis_Y2);
+                ImPlot::PlotLineG(
+                    "FPS",
+                    [](int i, void *data) {
+                        const auto &history = *static_cast<std::deque<float> *>(data);
+                        float y = 1.0f / history[i];
+                        return ImPlotPoint(static_cast<double>(i), static_cast<double>(y));
+                    },
+                    &m_frame_time_history,
+                    static_cast<int>(m_frame_time_history.size())
+                );
+            }
+
+            ImPlot::EndPlot();
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
         ImGui::SeparatorText("Camera");
         ImGui::SliderFloat("Speed", &m_camera_speed, 0.1f, 5000.0f);
         ImGui::SliderFloat("Sensitivity", &m_mouse_sensitivity, 0.01f, 2.0f);

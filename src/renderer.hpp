@@ -7,9 +7,6 @@
 
 #include <SDL3/SDL_video.h>
 
-#include "imgui_impl_dx12.h"
-#include "imgui_impl_sdl3.h"
-
 #include "forward_pass.hpp"
 #include "post_process_pass.hpp"
 #include "scene.hpp"
@@ -73,6 +70,8 @@ class Renderer
     }
 
     [[nodiscard]] bool init();
+
+    void cleanup();
 
     [[nodiscard]] bool resize(uint32_t &out_width, uint32_t &out_height);
 

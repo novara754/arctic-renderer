@@ -4,6 +4,11 @@
 
 #include <spdlog/spdlog.h>
 
+#include "imgui_impl_dx12.h"
+#include "imgui_impl_sdl3.h"
+
+#include "implot.h"
+
 bool Renderer::init()
 {
     if (!m_rhi.init(m_window, m_window_size.width, m_window_size.height))
@@ -153,6 +158,7 @@ bool Renderer::init()
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
+        ImPlot::CreateContext();
         ImGui::GetIO().IniFilename = nullptr;
 
         ImGui_ImplSDL3_InitForOther(m_window);
@@ -168,6 +174,14 @@ bool Renderer::init()
     }
 
     return true;
+}
+
+void Renderer::cleanup()
+{
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImPlot::DestroyContext();
+    ImGui::DestroyContext();
 }
 
 bool Renderer::resize(uint32_t &out_width, uint32_t &out_height)

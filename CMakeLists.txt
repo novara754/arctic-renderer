@@ -45,6 +45,15 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui)
 
 FetchContent_Declare(
+        implot
+        SYSTEM
+        GIT_REPOSITORY "https://github.com/epezent/implot"
+        GIT_TAG "v0.16"
+        EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(implot)
+
+FetchContent_Declare(
         DirectX-Headers
         SYSTEM
         GIT_REPOSITORY "https://github.com/microsoft/DirectX-Headers"
@@ -92,13 +101,14 @@ add_executable(arctic
         src/stb_image_impl.cpp
 
         ${imgui_SOURCE_DIR}/imgui.cpp
-        ${imgui_SOURCE_DIR}/imgui_demo.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp
         ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-
         ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_dx12.cpp
+
+        ${implot_SOURCE_DIR}/implot.cpp
+        ${implot_SOURCE_DIR}/implot_items.cpp
 )
 
 target_compile_options(arctic PRIVATE /W4 /WX)
@@ -113,6 +123,7 @@ target_compile_definitions(arctic PRIVATE
 
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR}/backends)
+target_include_directories(arctic PRIVATE ${implot_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${stb_SOURCE_DIR})
 target_link_libraries(arctic PRIVATE DirectX-Headers)
 target_link_libraries(arctic PRIVATE spdlog::spdlog)
