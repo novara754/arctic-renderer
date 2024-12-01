@@ -114,6 +114,9 @@ void ShadowMapPass::run(
     ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE shadow_map, const Scene &scene
 )
 {
+    ZoneScoped;
+    TracyD3D12Zone(m_rhi->tracy_ctx(), cmd_list, "Shadow Map Pass");
+
     ConstantBuffer constants{
         .proj_view = scene.sun.proj_view_matrix(),
     };
@@ -144,15 +147,19 @@ void ShadowMapPass::run(
     };
     cmd_list->RSSetScissorRects(1, &scissor);
 
-    for (const Object &obj : scene.objects)
     {
-        const Mesh &mesh = scene.meshes[obj.mesh_idx];
-        constants.model = obj.trs;
+        ZoneScopedN("Draw Loop");
+        for (const Object &obj : scene.objects)
+        {
+            const Mesh &mesh = scene.meshes[obj.mesh_idx];
+            constants.model = obj.trs;
 
-        cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
-        cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
-        cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
-        cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
+            cmd_list
+                ->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
+            cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
+            cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
+            cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
+        }
     }
 }
 

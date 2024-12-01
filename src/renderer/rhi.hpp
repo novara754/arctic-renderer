@@ -8,6 +8,11 @@
 
 #include <SDL3/SDL_video.h>
 
+#pragma warning(push)
+#pragma warning(disable : 4100)
+#include "tracy/TracyD3D12.hpp"
+#pragma warning(pop)
+
 #include "comptr.hpp"
 
 namespace Arctic::Renderer
@@ -21,6 +26,8 @@ class RHI
   private:
     ComPtr<ID3D12Device2> m_device;
     ComPtr<ID3D12CommandQueue> m_command_queue;
+
+    tracy::D3D12QueueCtx *m_tracy_d3d12_ctx;
 
     bool m_allow_tearing{false};
     ComPtr<IDXGISwapChain4> m_swapchain;
@@ -56,6 +63,11 @@ class RHI
   public:
     RHI() = default;
 
+    ~RHI()
+    {
+        TracyD3D12Destroy(m_tracy_d3d12_ctx);
+    }
+
     [[nodiscard]] bool init(SDL_Window *window, uint64_t width, uint32_t height);
 
     [[nodiscard]] bool resize(uint32_t new_width, int32_t new_height);
@@ -68,6 +80,11 @@ class RHI
     [[nodiscard]] ID3D12Device2 *device()
     {
         return m_device.Get();
+    }
+
+    [[nodiscard]] tracy::D3D12QueueCtx *tracy_ctx()
+    {
+        return m_tracy_d3d12_ctx;
     }
 
     [[nodiscard]] DXGI_FORMAT swapchain_format()

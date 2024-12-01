@@ -175,6 +175,9 @@ void ForwardPass::run(
     uint32_t srv_descriptor_size, uint32_t width, uint32_t height, const Scene &scene
 )
 {
+    ZoneScoped;
+    TracyD3D12Zone(m_rhi->tracy_ctx(), cmd_list, "Forward Pass");
+
     ConstantBuffer constants{
         .eye = scene.camera.eye,
         .proj_view = scene.camera.proj_view_matrix(),
@@ -210,21 +213,25 @@ void ForwardPass::run(
     };
     cmd_list->RSSetScissorRects(1, &scissor);
 
-    for (const Object &obj : scene.objects)
     {
-        const Mesh &mesh = scene.meshes[obj.mesh_idx];
-        constants.model = obj.trs;
+        ZoneScopedN("Draw Loop");
+        for (const Object &obj : scene.objects)
+        {
+            const Mesh &mesh = scene.meshes[obj.mesh_idx];
+            constants.model = obj.trs;
 
-        CD3DX12_GPU_DESCRIPTOR_HANDLE srv_handle(
-            srv_base_handle,
-            static_cast<INT>(mesh.material_idx * 5),
-            srv_descriptor_size
-        );
-        cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
-        cmd_list->SetGraphicsRootDescriptorTable(1, srv_handle);
-        cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
-        cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
-        cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
+            CD3DX12_GPU_DESCRIPTOR_HANDLE srv_handle(
+                srv_base_handle,
+                static_cast<INT>(mesh.material_idx * 5),
+                srv_descriptor_size
+            );
+            cmd_list
+                ->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
+            cmd_list->SetGraphicsRootDescriptorTable(1, srv_handle);
+            cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
+            cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
+            cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
+        }
     }
 }
 

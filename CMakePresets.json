@@ -1,39 +1,54 @@
 {
-  "version": 6,
+  "version": 8,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 25,
+    "minor": 28,
     "patch": 0
   },
   "configurePresets": [
     {
-      "name": "Debug",
-      "displayName": "MSVC (Debug)",
-      "description": "Configure and generate MSVC project files for all configurations in debug mode",
+      "name": "Base",
+      "hidden": true,
       "binaryDir": "${sourceDir}/build/",
       "generator": "Visual Studio 17 2022"
     },
     {
-      "name": "Release",
-      "displayName": "MSVC (Release)",
-      "description": "Configure and generate MSVC project files for all configurations in release mode",
-      "binaryDir": "${sourceDir}/build/",
-      "generator": "Visual Studio 17 2022"
+      "name": "no-tracy",
+      "displayName": "No Tracy",
+      "inherits": "Base"
+    },
+    {
+      "name": "with-tracy",
+      "displayName": "With Tracy",
+      "inherits": "Base",
+      "cacheVariables": {
+        "TRACY_ENABLE": "ON"
+      }
     }
   ],
   "buildPresets": [
     {
-      "name": "Debug",
-      "configurePreset": "Debug",
-      "displayName": "Build (Debug)",
-      "description": "Build with MSVC (Debug)",
+      "name": "debug-no-tracy",
+      "displayName": "Debug (No Tracy)",
+      "configurePreset": "no-tracy",
       "configuration": "Debug"
     },
     {
-      "name": "Release",
-      "configurePreset": "Release",
-      "displayName": "Build (Release)",
-      "description": "Build with MSVC (Release)",
+      "name": "debug-with-tracy",
+      "displayName": "Debug (With Tracy)",
+      "configurePreset": "with-tracy",
+      "configuration": "Debug"
+    },
+    {
+      "name": "release",
+      "displayName": "Release (No Tracy)",
+      "configurePreset": "no-tracy",
+      "configuration": "Release"
+    },
+    {
+      "name": "release-with-tracy",
+      "displayName": "Release (With Tracy)",
+      "configurePreset": "with-tracy",
       "configuration": "Release"
     }
   ]

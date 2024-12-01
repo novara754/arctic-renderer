@@ -124,6 +124,16 @@ bool RHI::init(SDL_Window *window, uint64_t width, uint32_t height)
     }
 
     // ------------
+    // Set up tracy context
+    // -------
+    m_tracy_d3d12_ctx = TracyD3D12Context(m_device.Get(), m_command_queue.Get());
+    if (!m_tracy_d3d12_ctx)
+    {
+        spdlog::error("RHI::init: failed to create tracy contex");
+        return false;
+    }
+
+    // ------------
     // Check for tearing support
     // -------
     m_allow_tearing = has_tearing_support(dxgi_factory4);
@@ -363,15 +373,23 @@ bool RHI::render_frame(
         &&render_func
 )
 {
+    ZoneScoped;
+    TracyD3D12NewFrame(m_tracy_d3d12_ctx);
+
     m_current_backbuffer_index = m_swapchain->GetCurrentBackBufferIndex();
-    DXERR(
-        wait_for_fence_value(
-            m_fence.Get(),
-            m_fence_event,
-            m_frame_fence_values[m_current_backbuffer_index]
-        ),
-        "RHI::render_frame: failed to wait for fence"
-    );
+
+    {
+        ZoneScopedN("Wait For Fence");
+        ZoneValue(m_current_backbuffer_index);
+        DXERR(
+            wait_for_fence_value(
+                m_fence.Get(),
+                m_fence_event,
+                m_frame_fence_values[m_current_backbuffer_index]
+            ),
+            "RHI::render_frame: failed to wait for fence"
+        );
+    }
 
     ComPtr<ID3D12CommandAllocator> cmd_allocator = m_command_allocators[m_current_backbuffer_index];
     ComPtr<ID3D12Resource> backbuffer = m_backbuffers[m_current_backbuffer_index];
@@ -403,6 +421,8 @@ bool RHI::render_frame(
         ),
         "RHI::render_frame: failed to signal fence"
     );
+
+    TracyD3D12Collect(m_tracy_d3d12_ctx);
 
     return true;
 }

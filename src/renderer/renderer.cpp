@@ -4,6 +4,9 @@
 
 #include <spdlog/spdlog.h>
 
+#include "tracy/Tracy.hpp"
+#include "tracy/TracyD3D12.hpp"
+
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_sdl3.h"
 
@@ -251,6 +254,8 @@ bool Renderer::render_frame(
     const Scene &scene, const Settings &settings, std::function<void()> &&build_ui
 )
 {
+    ZoneScoped;
+
     ImGui_ImplSDL3_NewFrame();
     ImGui_ImplDX12_NewFrame();
     ImGui::NewFrame();

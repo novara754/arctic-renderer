@@ -73,6 +73,9 @@ void PostProcessPass::run(
     uint32_t width, uint32_t height, uint32_t tm_method, float gamma, float exposure
 )
 {
+    ZoneScoped;
+    TracyD3D12Zone(m_rhi->tracy_ctx(), cmd_list, "Post Process Pass");
+
     ConstantBuffer constants{
         .gamma = gamma,
         .tm_method = tm_method,

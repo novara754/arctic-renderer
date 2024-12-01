@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.28)
 project(arctic)
 
 include(FetchContent)
@@ -89,6 +89,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+FetchContent_Declare(
+        tracy
+        SYSTEM
+        GIT_REPOSITORY "https://github.com/wolfpld/tracy"
+        GIT_TAG "v0.11.1"
+        EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(tracy)
+
 add_executable(arctic
         src/main.cpp
         src/app.cpp
@@ -110,6 +119,8 @@ add_executable(arctic
 
         ${implot_SOURCE_DIR}/implot.cpp
         ${implot_SOURCE_DIR}/implot_items.cpp
+
+        ${tracy_SOURCE_DIR}/public/TracyClient.cpp
 )
 
 target_compile_options(arctic PRIVATE /W4 /WX)
@@ -122,10 +133,16 @@ target_compile_definitions(arctic PRIVATE
         GLM_FORCE_EXPLICIT_CTOR
 )
 
+message("TRACY_ENABLE: ${TRACY_ENABLE}")
+if(TRACY_ENABLE)
+        target_compile_definitions(arctic PRIVATE TRACY_ENABLE)
+endif()
+
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR}/backends)
 target_include_directories(arctic PRIVATE ${implot_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${stb_SOURCE_DIR})
+target_include_directories(arctic PRIVATE ${tracy_SOURCE_DIR}/public)
 target_link_libraries(arctic PRIVATE DirectX-Headers)
 target_link_libraries(arctic PRIVATE spdlog::spdlog)
 target_link_libraries(arctic PRIVATE SDL3::SDL3-static)

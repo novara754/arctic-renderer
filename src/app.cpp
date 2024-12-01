@@ -49,6 +49,8 @@ void App::run()
     m_last_frame_time = std::chrono::high_resolution_clock::now();
     while (true)
     {
+        ZoneScopedN("Main Loop");
+
         std::chrono::high_resolution_clock::time_point now =
             std::chrono::high_resolution_clock::now();
         m_delta_time =
@@ -391,11 +393,15 @@ bool App::load_scene(const std::filesystem::path &path, Renderer::Scene &out_sce
 
 bool App::render_frame()
 {
+    ZoneScoped;
+
     if (!m_renderer.render_frame(m_scene, m_settings, [this] { build_ui(); }))
     {
         spdlog::error("App::render_frame: failed");
         return false;
     }
+
+    FrameMark;
 
     return true;
 }

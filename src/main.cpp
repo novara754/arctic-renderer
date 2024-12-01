@@ -9,6 +9,12 @@ int main(int argc, char **argv)
 {
     spdlog::set_level(spdlog::level::trace);
 
+#ifdef TRACY_ENABLE
+    spdlog::debug("main: tracy enabled");
+#else
+    spdlog::debug("main: tracy disabled");
+#endif
+
     if (argc != 2)
     {
         spdlog::error("main: usage: arctic <scene>");
