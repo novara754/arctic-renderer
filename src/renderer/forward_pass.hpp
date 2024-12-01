@@ -6,6 +6,9 @@
 #include "rhi.hpp"
 #include "scene.hpp"
 
+namespace Arctic::Renderer
+{
+
 class ForwardPass
 {
     struct ConstantBuffer
@@ -51,3 +54,5 @@ class ForwardPass
         D3D12_CPU_DESCRIPTOR_HANDLE depth_target_dsv, D3D12_GPU_DESCRIPTOR_HANDLE srv_base_handle,
         uint32_t srv_descriptor_size, uint32_t width, uint32_t height, const Scene &scene);
 };
+
+} // namespace Arctic::Renderer

@@ -5,6 +5,9 @@
 #include "comptr.hpp"
 #include "rhi.hpp"
 
+namespace Arctic::Renderer
+{
+
 class PostProcessPass
 {
     struct ConstantBuffer
@@ -39,3 +42,5 @@ class PostProcessPass
     run(ID3D12GraphicsCommandList *cmd_list, D3D12_GPU_DESCRIPTOR_HANDLE descriptor_handle,
         uint32_t width, uint32_t height, uint32_t tm_method, float gamma, float exposure);
 };
+
+} // namespace Arctic::Renderer

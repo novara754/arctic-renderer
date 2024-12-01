@@ -9,6 +9,9 @@
 
 #define CONSTANTS_SIZE(ty) ((sizeof(ty) + 3) / 4)
 
+namespace Arctic::Renderer
+{
+
 bool ForwardPass::init()
 {
     ComPtr<ID3DBlob> vs_code, ps_code;
@@ -224,3 +227,5 @@ void ForwardPass::run(
         cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
     }
 }
+
+} // namespace Arctic::Renderer

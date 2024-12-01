@@ -8,8 +8,11 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_video.h>
 
-#include "renderer.hpp"
-#include "scene.hpp"
+#include "renderer/renderer.hpp"
+#include "renderer/scene.hpp"
+
+namespace Arctic
+{
 
 class App
 {
@@ -20,7 +23,7 @@ class App
   private:
     static constexpr int FRAME_TIME_HISTORY_SIZE = 1000;
 
-    Renderer m_renderer;
+    Renderer::Renderer m_renderer;
 
     std::chrono::high_resolution_clock::time_point m_last_frame_time;
     float m_delta_time;
@@ -36,7 +39,7 @@ class App
 
     std::filesystem::path m_scene_path;
     bool m_update_lights{true};
-    Scene m_scene{
+    Renderer::Scene m_scene{
         .camera{
             .eye = {0.0f, 5.0f, 0.0f},
             .rotation = {0.0f, 0.0f},
@@ -51,7 +54,7 @@ class App
             .color = {8.0f, 8.0f, 8.0f},
         },
         .point_lights{
-            PointLight{
+            Renderer::PointLight{
                 .position = {0.0f, 1.0f, 0.0f},
                 .color = {10.0f, 0.0f, 0.0f},
             },
@@ -59,7 +62,7 @@ class App
         .meshes{},
         .objects{},
     };
-    Settings m_settings;
+    Renderer::Settings m_settings;
 
   public:
     explicit App(SDL_Window *window, const std::filesystem::path &scene_path)
@@ -76,7 +79,7 @@ class App
 
     void update();
 
-    [[nodiscard]] bool load_scene(const std::filesystem::path &path, Scene &out_scene);
+    [[nodiscard]] bool load_scene(const std::filesystem::path &path, Renderer::Scene &out_scene);
 
     [[nodiscard]] bool render_frame();
 
@@ -84,3 +87,5 @@ class App
 
     [[nodiscard]] bool handle_resize();
 };
+
+} // namespace Arctic

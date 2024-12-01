@@ -9,9 +9,10 @@
 
 #define CONSTANTS_SIZE(ty) ((sizeof(ty) + 3) / 4)
 
-bool PostProcessPass::init(
+namespace Arctic::Renderer
+{
 
-)
+bool PostProcessPass::init()
 {
     ComPtr<ID3DBlob> cs_code;
     if (!compile_shader(L"./shaders/post_process.hlsl", "main", "cs_5_0", &cs_code))
@@ -88,3 +89,5 @@ void PostProcessPass::run(
         1
     );
 }
+
+} // namespace Arctic::Renderer

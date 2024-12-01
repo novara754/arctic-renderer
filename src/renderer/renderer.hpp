@@ -12,6 +12,9 @@
 #include "scene.hpp"
 #include "shadow_map_pass.hpp"
 
+namespace Arctic::Renderer
+{
+
 class Renderer
 {
   public:
@@ -122,3 +125,5 @@ class Renderer
 
     D3D12_GPU_DESCRIPTOR_HANDLE create_cbv(ID3D12Resource *resource);
 };
+
+} // namespace Arctic::Renderer

@@ -8,6 +8,9 @@
 
 #include "dxerr.hpp"
 
+namespace Arctic::Renderer
+{
+
 bool get_best_adapter(
     ComPtr<IDXGIFactory4> dxgi_factory4, ComPtr<IDXGIAdapter4> &out_dxgi_adapter4
 );
@@ -730,3 +733,5 @@ bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **
 
     return true;
 }
+
+} // namespace Arctic::Renderer

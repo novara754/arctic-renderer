@@ -6,6 +6,9 @@
 #include "rhi.hpp"
 #include "scene.hpp"
 
+namespace Arctic::Renderer
+{
+
 class ShadowMapPass
 {
     struct ConstantBuffer
@@ -43,3 +46,5 @@ class ShadowMapPass
     run(ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE shadow_map,
         const Scene &scene);
 };
+
+} // namespace Arctic::Renderer

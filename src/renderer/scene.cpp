@@ -3,6 +3,9 @@
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+namespace Arctic::Renderer
+{
+
 glm::vec3 dir_from_rot(const glm::vec2 &euler_rot_deg)
 {
     float x_rad = glm::radians(euler_rot_deg.x);
@@ -50,3 +53,5 @@ glm::mat4 DirectionalLight::proj_view_matrix() const
     glm::mat4 proj = glm::orthoRH(-16.0f, 16.0f, -16.0f, 16.0f, 0.1f, 50.0f);
     return proj * view;
 }
+
+} // namespace Arctic::Renderer

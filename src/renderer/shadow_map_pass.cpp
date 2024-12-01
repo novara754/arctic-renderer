@@ -11,6 +11,9 @@
 
 #define CONSTANTS_SIZE(ty) ((sizeof(ty) + 3) / 4)
 
+namespace Arctic::Renderer
+{
+
 bool ShadowMapPass::init()
 {
     ComPtr<ID3DBlob> vs_code;
@@ -152,3 +155,5 @@ void ShadowMapPass::run(
         cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);
     }
 }
+
+} // namespace Arctic::Renderer

@@ -11,6 +11,9 @@
 
 #include "comptr.hpp"
 
+namespace Arctic::Renderer
+{
+
 struct Camera
 {
     glm::vec3 eye;
@@ -100,3 +103,5 @@ struct Settings
     float gamma{2.2f};
     float exposure{1.0f};
 };
+
+} // namespace Arctic::Renderer

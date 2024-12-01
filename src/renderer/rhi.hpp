@@ -10,6 +10,9 @@
 
 #include "comptr.hpp"
 
+namespace Arctic::Renderer
+{
+
 class RHI
 {
   public:
@@ -109,3 +112,5 @@ class RHI
 };
 
 bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **code);
+
+} // namespace Arctic::Renderer

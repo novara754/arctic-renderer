@@ -21,6 +21,9 @@
 
 #include "stb_image.h"
 
+namespace Arctic
+{
+
 glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat);
 
 [[nodiscard]] bool App::init()
@@ -165,7 +168,7 @@ void App::update()
     }
 }
 
-bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
+bool App::load_scene(const std::filesystem::path &path, Renderer::Scene &out_scene)
 {
     Assimp::Importer importer;
 
@@ -274,7 +277,7 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
             return false;
         }
 
-        Material material;
+        Renderer::Material material;
         if (!m_renderer.create_material(
                 material,
                 diffuse_image_data,
@@ -299,12 +302,12 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
     {
         const aiMesh *ai_mesh = scene->mMeshes[mesh_idx];
 
-        std::vector<Vertex> vertices;
+        std::vector<Renderer::Vertex> vertices;
         std::vector<uint32_t> indices;
 
         for (size_t vertex_idx = 0; vertex_idx < ai_mesh->mNumVertices; ++vertex_idx)
         {
-            Vertex vertex{
+            Renderer::Vertex vertex{
                 .position =
                     {
                         ai_mesh->mVertices[vertex_idx].x,
@@ -347,7 +350,7 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
             }
         }
 
-        Mesh mesh;
+        Renderer::Mesh mesh;
         if (!m_renderer.create_mesh(mesh, vertices, indices, ai_mesh->mMaterialIndex))
         {
             spdlog::error("App::load_scene: failed to create mesh #{}", mesh_idx);
@@ -376,7 +379,7 @@ bool App::load_scene(const std::filesystem::path &path, Scene &out_scene)
 
         for (unsigned int i = 0; i < node->mNumMeshes; ++i)
         {
-            out_scene.objects.emplace_back(Object{
+            out_scene.objects.emplace_back(Renderer::Object{
                 .trs = trs,
                 .mesh_idx = node->mMeshes[i],
             });
@@ -492,7 +495,7 @@ void App::build_ui()
 
     if (ImGui::Begin("Lights", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
-        for (PointLight &light : m_scene.point_lights)
+        for (Renderer::PointLight &light : m_scene.point_lights)
         {
             ImGui::PushID(&light);
             ImGui::Separator();
@@ -506,11 +509,11 @@ void App::build_ui()
             ImGui::PopID();
         }
 
-        if (m_scene.point_lights.size() < Renderer::MAX_NUM_POINT_LIGHTS)
+        if (m_scene.point_lights.size() < Renderer::Renderer::MAX_NUM_POINT_LIGHTS)
         {
             if (ImGui::Button("Add"))
             {
-                m_scene.point_lights.emplace_back(PointLight{
+                m_scene.point_lights.emplace_back(Renderer::PointLight{
                     .position{0.0f, 0.0f, 0.0f},
                     .color{10.0f, 10.0f, 10.0f},
                 });
@@ -560,3 +563,5 @@ glm::mat4 assimp_to_mat4(const aiMatrix4x4 &mat)
     );
     return out;
 }
+
+} // namespace Arctic

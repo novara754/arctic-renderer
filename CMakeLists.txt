@@ -91,12 +91,12 @@ FetchContent_MakeAvailable(glm)
 add_executable(arctic
         src/main.cpp
         src/app.cpp
-        src/scene.cpp
-        src/rhi.cpp
-        src/renderer.cpp
-        src/forward_pass.cpp
-        src/post_process_pass.cpp
-        src/shadow_map_pass.cpp
+        src/renderer/scene.cpp
+        src/renderer/rhi.cpp
+        src/renderer/renderer.cpp
+        src/renderer/forward_pass.cpp
+        src/renderer/post_process_pass.cpp
+        src/renderer/shadow_map_pass.cpp
 
         src/stb_image_impl.cpp
 

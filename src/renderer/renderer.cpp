@@ -9,7 +9,10 @@
 
 #include "implot.h"
 
-#include "util.hpp"
+#include "../util.hpp"
+
+namespace Arctic::Renderer
+{
 
 bool Renderer::init()
 {
@@ -620,3 +623,5 @@ D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_cbv(ID3D12Resource *resource)
         m_cbv_srv_uav_descriptor_size
     );
 }
+
+} // namespace Arctic::Renderer
