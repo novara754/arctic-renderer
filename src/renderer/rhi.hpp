@@ -21,7 +21,7 @@ namespace Arctic::Renderer
 class RHI
 {
   public:
-    static constexpr size_t NUM_FRAMES = 2;
+    static constexpr size_t NUM_FRAMES = 3;
 
   private:
     ComPtr<ID3D12Device2> m_device;
