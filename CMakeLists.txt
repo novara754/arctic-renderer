@@ -85,6 +85,7 @@ FetchContent_Declare(
         SYSTEM
         GIT_REPOSITORY "https://github.com/g-truc/glm"
         GIT_TAG "1.0.1"
+        EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(glm)
 
