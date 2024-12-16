@@ -63,6 +63,22 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(DirectX-Headers)
 
 FetchContent_Declare(
+        dxc
+        SYSTEM
+        URL "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2407/dxc_2024_07_31.zip"
+        EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(dxc)
+
+FetchContent_Declare(
+        agility_sdk
+        SYSTEM
+        URL "https://globalcdn.nuget.org/packages/microsoft.direct3d.d3d12.1.614.1.nupkg?packageVersion=1.614.1"
+        EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(agility_sdk)
+
+FetchContent_Declare(
         assimp
         SYSTEM
         GIT_REPOSITORY "https://github.com/assimp/assimp"
@@ -103,6 +119,7 @@ add_executable(arctic
         src/app.cpp
         src/renderer/scene.cpp
         src/renderer/rhi.cpp
+        src/renderer/compiler.cpp
         src/renderer/renderer.cpp
         src/renderer/forward_pass.cpp
         src/renderer/post_process_pass.cpp
@@ -144,9 +161,25 @@ target_include_directories(arctic PRIVATE ${imgui_SOURCE_DIR}/backends)
 target_include_directories(arctic PRIVATE ${implot_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${stb_SOURCE_DIR})
 target_include_directories(arctic PRIVATE ${tracy_SOURCE_DIR}/public)
+target_include_directories(arctic PRIVATE ${dxc_SOURCE_DIR}/inc)
+target_link_directories(arctic PRIVATE ${dxc_SOURCE_DIR}/lib/x64)
 target_link_libraries(arctic PRIVATE DirectX-Headers)
 target_link_libraries(arctic PRIVATE spdlog::spdlog)
 target_link_libraries(arctic PRIVATE SDL3::SDL3-static)
 target_link_libraries(arctic PRIVATE assimp::assimp)
 target_link_libraries(arctic PRIVATE glm::glm)
-target_link_libraries(arctic PRIVATE d3d12.lib dxgi.lib dxguid.lib d3dcompiler.lib)
+target_link_libraries(arctic PRIVATE d3d12.lib dxgi.lib dxguid.lib dxcompiler.lib)
+
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        configure_file(${dxc_SOURCE_DIR}/bin/x64/dxil.dll ${CMAKE_CURRENT_BINARY_DIR}/Debug/dxil.dll COPYONLY)
+        configure_file(${agility_sdk_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll ${CMAKE_CURRENT_BINARY_DIR}/Debug/D3D12Core.dll COPYONLY)
+        configure_file(${agility_sdk_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll ${CMAKE_CURRENT_BINARY_DIR}/Debug/d3d12SDKLayers.dll COPYONLY)
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "")
+        configure_file(${dxc_SOURCE_DIR}/bin/x64/dxil.dll ${CMAKE_CURRENT_BINARY_DIR}/Debug/dxil.dll COPYONLY)
+        configure_file(${agility_sdk_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll ${CMAKE_CURRENT_BINARY_DIR}/Debug/D3D12Core.dll COPYONLY)
+        configure_file(${agility_sdk_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll ${CMAKE_CURRENT_BINARY_DIR}/Debug/d3d12SDKLayers.dll COPYONLY)
+else()
+        configure_file(${dxc_SOURCE_DIR}/bin/x64/dxil.dll ${CMAKE_CURRENT_BINARY_DIR}/Release/dxil.dll COPYONLY)
+        configure_file(${agility_sdk_SOURCE_DIR}/build/native/bin/x64/D3D12Core.dll ${CMAKE_CURRENT_BINARY_DIR}/Release/D3D12Core.dll COPYONLY)
+        configure_file(${agility_sdk_SOURCE_DIR}/build/native/bin/x64/d3d12SDKLayers.dll ${CMAKE_CURRENT_BINARY_DIR}/Release/d3d12SDKLayers.dll COPYONLY)
+endif()

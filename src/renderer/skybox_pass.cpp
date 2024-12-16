@@ -13,13 +13,13 @@ namespace Arctic::Renderer
 
 [[nodiscard]] bool SkyboxPass::init()
 {
-    ComPtr<ID3DBlob> vs_code, ps_code;
-    if (!compile_shader(L"./shaders/skybox.hlsl", "vs_main", "vs_5_0", &vs_code))
+    std::vector<uint8_t> vs_code, ps_code;
+    if (!m_rhi->compiler().compile_shader(L"./shaders/skybox.hlsl", L"vs_main", L"vs_6_6", vs_code))
     {
         spdlog::error("SkyboxPass::init: failed to compile vertex shader");
         return false;
     }
-    if (!compile_shader(L"./shaders/skybox.hlsl", "ps_main", "ps_5_0", &ps_code))
+    if (!m_rhi->compiler().compile_shader(L"./shaders/skybox.hlsl", L"ps_main", L"ps_6_6", ps_code))
     {
         spdlog::error("SkyboxPass::init: failed to compile pixel shader");
         return false;
@@ -80,8 +80,8 @@ namespace Arctic::Renderer
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
     pipeline_desc.pRootSignature = m_root_signature.Get();
-    pipeline_desc.VS = CD3DX12_SHADER_BYTECODE(vs_code.Get());
-    pipeline_desc.PS = CD3DX12_SHADER_BYTECODE(ps_code.Get());
+    pipeline_desc.VS = {vs_code.data(), vs_code.size()};
+    pipeline_desc.PS = {ps_code.data(), ps_code.size()};
     pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
     pipeline_desc.RasterizerState.FrontCounterClockwise = TRUE;
     pipeline_desc.SampleMask = ~0u;

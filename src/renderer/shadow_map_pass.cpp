@@ -16,8 +16,8 @@ namespace Arctic::Renderer
 
 bool ShadowMapPass::init()
 {
-    ComPtr<ID3DBlob> vs_code;
-    if (!compile_shader(L"./shaders/depth.hlsl", "main", "vs_5_0", &vs_code))
+    std::vector<uint8_t> vs_code;
+    if (!m_rhi->compiler().compile_shader(L"./shaders/depth.hlsl", L"main", L"vs_6_6", vs_code))
     {
         spdlog::error("ShadowMapPass::init: failed to compile depth shader");
         return false;
@@ -89,7 +89,7 @@ bool ShadowMapPass::init()
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
     pipeline_desc.pRootSignature = m_root_signature.Get();
-    pipeline_desc.VS = CD3DX12_SHADER_BYTECODE(vs_code.Get());
+    pipeline_desc.VS = {vs_code.data(), vs_code.size()};
     pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
     pipeline_desc.SampleMask = ~0u;
     pipeline_desc.RasterizerState = CD3DX12_RASTERIZER_DESC(CD3DX12_DEFAULT());

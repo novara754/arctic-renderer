@@ -13,6 +13,7 @@
 #include "tracy/TracyD3D12.hpp"
 #pragma warning(pop)
 
+#include "compiler.hpp"
 #include "comptr.hpp"
 
 namespace Arctic::Renderer
@@ -55,6 +56,8 @@ class RHI
         uint64_t fence_value{0};
     } m_immediate_submit;
 
+    Compiler m_compiler;
+
     RHI(const RHI &) = delete;
     RHI &operator=(const RHI &) = delete;
     RHI(RHI &&) = delete;
@@ -92,6 +95,11 @@ class RHI
         return m_swapchain_format;
     }
 
+    [[nodiscard]] const Compiler &compiler() const
+    {
+        return m_compiler;
+    }
+
     [[nodiscard]] bool create_descriptor_heap(
         D3D12_DESCRIPTOR_HEAP_TYPE type, UINT num_descriptors, D3D12_DESCRIPTOR_HEAP_FLAGS flags,
         ComPtr<ID3D12DescriptorHeap> &out_heap
@@ -127,7 +135,5 @@ class RHI
     [[nodiscard]] bool wait_for_fence_value(ID3D12Fence *fence, HANDLE fence_event, uint64_t value);
     [[nodiscard]] bool flush();
 };
-
-bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **code);
 
 } // namespace Arctic::Renderer

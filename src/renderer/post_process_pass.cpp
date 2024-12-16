@@ -14,8 +14,9 @@ namespace Arctic::Renderer
 
 bool PostProcessPass::init()
 {
-    ComPtr<ID3DBlob> cs_code;
-    if (!compile_shader(L"./shaders/post_process.hlsl", "main", "cs_5_0", &cs_code))
+    std::vector<uint8_t> cs_code;
+    if (!m_rhi->compiler()
+             .compile_shader(L"./shaders/post_process.hlsl", L"main", L"cs_6_6", cs_code))
     {
         spdlog::error("PostProcessPass::init: failed to compile shader");
         return false;
@@ -59,7 +60,7 @@ bool PostProcessPass::init()
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_desc{};
     pipeline_desc.pRootSignature = m_root_signature.Get();
-    pipeline_desc.CS = CD3DX12_SHADER_BYTECODE(cs_code.Get());
+    pipeline_desc.CS = {cs_code.data(), cs_code.size()};
     DXERR(
         m_rhi->device()->CreateComputePipelineState(&pipeline_desc, IID_PPV_ARGS(&m_pipeline)),
         "PostProcessPass::init: failed to create pipeline state"

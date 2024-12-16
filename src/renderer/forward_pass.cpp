@@ -14,13 +14,15 @@ namespace Arctic::Renderer
 
 bool ForwardPass::init()
 {
-    ComPtr<ID3DBlob> vs_code, ps_code;
-    if (!compile_shader(L"./shaders/forward.hlsl", "vs_main", "vs_5_0", &vs_code))
+    std::vector<uint8_t> vs_code, ps_code;
+    if (!m_rhi->compiler()
+             .compile_shader(L"./shaders/forward.hlsl", L"vs_main", L"vs_6_6", vs_code))
     {
         spdlog::error("ForwardPass::init: failed to compile vertex shader");
         return false;
     }
-    if (!compile_shader(L"./shaders/forward.hlsl", "ps_main", "ps_5_0", &ps_code))
+    if (!m_rhi->compiler()
+             .compile_shader(L"./shaders/forward.hlsl", L"ps_main", L"ps_6_6", ps_code))
     {
         spdlog::error("ForwardPass::init: failed to compile pixel shader");
         return false;
@@ -150,8 +152,8 @@ bool ForwardPass::init()
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
     pipeline_desc.pRootSignature = m_root_signature.Get();
-    pipeline_desc.VS = CD3DX12_SHADER_BYTECODE(vs_code.Get());
-    pipeline_desc.PS = CD3DX12_SHADER_BYTECODE(ps_code.Get());
+    pipeline_desc.VS = {vs_code.data(), vs_code.size()};
+    pipeline_desc.PS = {ps_code.data(), ps_code.size()};
     pipeline_desc.BlendState = CD3DX12_BLEND_DESC(CD3DX12_DEFAULT());
     pipeline_desc.SampleMask = ~0u;
     pipeline_desc.RasterizerState = CD3DX12_RASTERIZER_DESC(CD3DX12_DEFAULT());

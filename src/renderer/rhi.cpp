@@ -8,6 +8,11 @@
 
 #include "dxerr.hpp"
 
+extern "C" {
+__declspec(dllexport) extern const UINT D3D12SDKVersion = 614;
+__declspec(dllexport) extern const LPCSTR D3D12SDKPath = ".";
+}
+
 namespace Arctic::Renderer
 {
 
@@ -65,7 +70,7 @@ bool RHI::init(SDL_Window *window, uint64_t width, uint32_t height)
     // Create device
     // -------
     DXERR(
-        D3D12CreateDevice(dxgi_adapter4.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device)),
+        D3D12CreateDevice(dxgi_adapter4.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&m_device)),
         "RHI::init: failed to create device"
     );
     spdlog::trace("RHI::init: created device");
@@ -90,6 +95,7 @@ bool RHI::init(SDL_Window *window, uint64_t width, uint32_t height)
                 // triggered when using visual studio graphics debugging tools
                 D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
                 D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
+                D3D12_MESSAGE_ID_CREATERESOURCE_STATE_IGNORED,
             };
 
             D3D12_INFO_QUEUE_FILTER filter{};
@@ -301,6 +307,13 @@ bool RHI::init(SDL_Window *window, uint64_t width, uint32_t height)
         spdlog::trace("RHI::init: created immediate submit objects");
     }
 
+    if (!m_compiler.init())
+    {
+        spdlog::error("RHI::init: failed to initialize shader compiler");
+        return false;
+    }
+    spdlog::trace("RHI::init: initialized shader compiler");
+
     return true;
 }
 
@@ -331,7 +344,7 @@ bool get_best_adapter(ComPtr<IDXGIFactory4> dxgi_factory4, ComPtr<IDXGIAdapter4>
         }
     }
 
-    return true;
+    return out_dxgi_adapter4 != nullptr;
 }
 
 bool RHI::resize(uint32_t new_width, int32_t new_height)
@@ -711,47 +724,6 @@ bool has_tearing_support(ComPtr<IDXGIFactory4> dxgi_factory4)
     }
 
     return false;
-}
-
-bool compile_shader(LPCWSTR path, LPCSTR entry_point, LPCSTR target, ID3DBlob **code)
-{
-    UINT compile_flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_WARNINGS_ARE_ERRORS;
-#if defined(_DEBUG)
-    compile_flags |= D3DCOMPILE_DEBUG;
-#endif
-
-    ComPtr<ID3DBlob> errors;
-    if (HRESULT res = D3DCompileFromFile(
-            path,
-            nullptr,
-            nullptr,
-            entry_point,
-            target,
-            compile_flags,
-            0,
-            code,
-            &errors
-        );
-        FAILED(res))
-    {
-        if (errors)
-        {
-            spdlog::error(
-                "compile_shader: failed to compile shader:\n{}",
-                static_cast<const char *>(errors->GetBufferPointer())
-            );
-        }
-        else
-        {
-            spdlog::error(
-                "compile_shader: failed to compile shader: 0x{:x}",
-                static_cast<unsigned long>(res)
-            );
-        }
-        return false;
-    }
-
-    return true;
 }
 
 } // namespace Arctic::Renderer
