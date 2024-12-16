@@ -28,12 +28,8 @@ namespace Arctic::Renderer
 
     ComPtr<ID3DBlob> root_signature;
 
-    CD3DX12_DESCRIPTOR_RANGE descriptor_range;
-    descriptor_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-
-    std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
+    std::array<CD3DX12_ROOT_PARAMETER, 1> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
-    root_parameters[1].InitAsDescriptorTable(1, &descriptor_range);
 
     D3D12_STATIC_SAMPLER_DESC sampler{};
     sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -56,7 +52,7 @@ namespace Arctic::Renderer
         root_parameters.data(),
         1,
         &sampler,
-        D3D12_ROOT_SIGNATURE_FLAG_NONE
+        D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
     );
     DXERR(
         D3D12SerializeRootSignature(
@@ -105,29 +101,26 @@ namespace Arctic::Renderer
     return true;
 }
 
-void SkyboxPass::run(
-    ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE color_target_rtv,
-    D3D12_CPU_DESCRIPTOR_HANDLE depth_target_rtv, D3D12_GPU_DESCRIPTOR_HANDLE environment_srv,
-    uint32_t width, uint32_t height, const Camera &camera
-)
+void SkyboxPass::run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data)
 {
     ZoneScoped;
     TracyD3D12Zone(m_rhi->tracy_ctx(), cmd_list, "Skybox Pass");
 
     ConstantBuffer constants{
-        .proj_view = camera.proj_view_matrix_no_translation(),
+        .environment_idx = run_data.environment_srv_idx,
+        .proj_view = run_data.camera.proj_view_matrix_no_translation(),
     };
 
     cmd_list->SetGraphicsRootSignature(m_root_signature.Get());
     cmd_list->SetPipelineState(m_pipeline.Get());
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmd_list->OMSetRenderTargets(1, &color_target_rtv, FALSE, &depth_target_rtv);
+    cmd_list->OMSetRenderTargets(1, &run_data.color_target_rtv, FALSE, &run_data.depth_target_rtv);
 
     D3D12_VIEWPORT viewport{
         .TopLeftX = 0.0f,
         .TopLeftY = 0.0f,
-        .Width = static_cast<float>(width),
-        .Height = static_cast<float>(height),
+        .Width = static_cast<float>(run_data.viewport_width),
+        .Height = static_cast<float>(run_data.viewport_height),
         .MinDepth = 0.0f,
         .MaxDepth = 1.0f,
     };
@@ -135,13 +128,12 @@ void SkyboxPass::run(
     D3D12_RECT scissor{
         .left = 0,
         .top = 0,
-        .right = static_cast<long>(width),
-        .bottom = static_cast<long>(height),
+        .right = static_cast<long>(run_data.viewport_width),
+        .bottom = static_cast<long>(run_data.viewport_height),
     };
     cmd_list->RSSetScissorRects(1, &scissor);
 
     cmd_list->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
-    cmd_list->SetGraphicsRootDescriptorTable(1, environment_srv);
     cmd_list->DrawInstanced(36, 1, 0, 0);
 }
 

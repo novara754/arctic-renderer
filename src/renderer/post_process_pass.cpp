@@ -23,16 +23,17 @@ bool PostProcessPass::init()
     }
     spdlog::trace("PostProcessPass::init: compiled shader");
 
-    CD3DX12_DESCRIPTOR_RANGE descriptor_range{};
-    descriptor_range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0);
-
-    std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
+    std::array<CD3DX12_ROOT_PARAMETER, 1> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
-    root_parameters[1].InitAsDescriptorTable(1, &descriptor_range);
 
     CD3DX12_ROOT_SIGNATURE_DESC root_signature_desc;
-    root_signature_desc
-        .Init(static_cast<UINT>(root_parameters.size()), root_parameters.data(), 0, nullptr);
+    root_signature_desc.Init(
+        static_cast<UINT>(root_parameters.size()),
+        root_parameters.data(),
+        0,
+        nullptr,
+        D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
+    );
     ComPtr<ID3DBlob> root_signature, error;
     if (FAILED(D3D12SerializeRootSignature(
             &root_signature_desc,
@@ -69,27 +70,26 @@ bool PostProcessPass::init()
     return true;
 }
 
-void PostProcessPass::run(
-    ID3D12GraphicsCommandList *cmd_list, D3D12_GPU_DESCRIPTOR_HANDLE descriptor_handle,
-    uint32_t width, uint32_t height, uint32_t tm_method, float gamma, float exposure
-)
+void PostProcessPass::run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data)
 {
     ZoneScoped;
     TracyD3D12Zone(m_rhi->tracy_ctx(), cmd_list, "Post Process Pass");
 
     ConstantBuffer constants{
-        .gamma = gamma,
-        .tm_method = tm_method,
-        .exposure = exposure,
+        .input_idx = run_data.input_uav_idx,
+        .output_idx = run_data.output_uav_idx,
+
+        .gamma = run_data.gamma,
+        .tm_method = run_data.tm_method,
+        .exposure = run_data.exposure,
     };
 
     cmd_list->SetComputeRootSignature(m_root_signature.Get());
     cmd_list->SetPipelineState(m_pipeline.Get());
     cmd_list->SetComputeRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
-    cmd_list->SetComputeRootDescriptorTable(1, descriptor_handle);
     cmd_list->Dispatch(
-        (width + GROUP_WIDTH - 1) / GROUP_WIDTH,
-        (height + GROUP_HEIGHT - 1) / GROUP_HEIGHT,
+        (run_data.viewport_width + GROUP_WIDTH - 1) / GROUP_WIDTH,
+        (run_data.viewport_height + GROUP_HEIGHT - 1) / GROUP_HEIGHT,
         1
     );
 }

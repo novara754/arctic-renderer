@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <d3d12.h>
 
 #include "comptr.hpp"
@@ -23,6 +25,11 @@ class ForwardPass
         float ambient;
         glm::vec3 sun_color;
 
+        uint32_t shadow_map_idx;
+        uint32_t environment_idx;
+        uint32_t material_offset;
+        uint32_t lights_buffer_idx;
+
         uint32_t padding1{0};
     };
 
@@ -31,6 +38,22 @@ class ForwardPass
         "Size of ForwardPass::ConstantBuffer is not a multiple of 4"
     );
 
+  public:
+    struct RunData
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE color_target_rtv;
+        D3D12_CPU_DESCRIPTOR_HANDLE depth_target_dsv;
+        uint32_t viewport_width;
+        uint32_t viewport_height;
+        uint32_t shadow_map_srv_idx;
+        uint32_t environment_srv_idx;
+        uint32_t lights_buffer_cbv_idx;
+        std::span<Mesh> meshes;
+        std::span<Material> materials;
+        const Scene &scene;
+    };
+
+  private:
     RHI *m_rhi;
 
     ComPtr<ID3D12RootSignature> m_root_signature;
@@ -49,10 +72,7 @@ class ForwardPass
 
     [[nodiscard]] bool init();
 
-    void
-    run(ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE color_target_rtv,
-        D3D12_CPU_DESCRIPTOR_HANDLE depth_target_dsv, D3D12_GPU_DESCRIPTOR_HANDLE srv_base_handle,
-        uint32_t srv_descriptor_size, uint32_t width, uint32_t height, const Scene &scene);
+    void run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data);
 };
 
 } // namespace Arctic::Renderer

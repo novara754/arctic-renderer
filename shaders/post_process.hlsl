@@ -4,12 +4,13 @@
 
 cbuffer Settings : register(b0)
 {
+	uint input_idx;
+	uint output_idx;
+
 	float gamma;
 	uint tm_method;
 	float exposure;
 }
-
-RWTexture2D<float4> tex[2] : register(u0);
 
 static float3x3 ACES_INPUT_MAT = float3x3(
 	0.59719, 0.35458, 0.04823,
@@ -57,8 +58,11 @@ float3 tm_aces(float3 color)
 
 [numthreads(16, 16, 1)] void main(uint3 thread_id : SV_DISPATCHTHREADID)
 {
+	RWTexture2D<float4> t_input = ResourceDescriptorHeap[input_idx];
+	RWTexture2D<float4> t_output = ResourceDescriptorHeap[output_idx];
+
 	uint width, height;
-	tex[0].GetDimensions(width, height);
+	t_input.GetDimensions(width, height);
 
 	uint2 coord = thread_id.xy;
 
@@ -67,7 +71,7 @@ float3 tm_aces(float3 color)
 		return;
 	}
 
-	float3 color = tex[0][coord].rgb;
+	float3 color = t_input[coord].rgb;
 
 	switch (tm_method)
 	{
@@ -85,5 +89,5 @@ float3 tm_aces(float3 color)
 
 	color = correct_gamma(color);
 
-	tex[1][coord] = float4(color, 1.0);
+	t_output[coord] = float4(color, 1.0);
 }

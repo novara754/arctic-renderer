@@ -1,7 +1,5 @@
 #pragma once
 
-// #include <cstdint>
-
 #include <d3d12.h>
 
 #include <glm/mat4x4.hpp>
@@ -17,7 +15,20 @@ class SkyboxPass
 {
     struct ConstantBuffer
     {
+        uint32_t environment_idx;
+        uint32_t padding0[3]{0};
         glm::mat4 proj_view;
+    };
+
+  public:
+    struct RunData
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE color_target_rtv;
+        D3D12_CPU_DESCRIPTOR_HANDLE depth_target_rtv;
+        uint32_t environment_srv_idx;
+        uint32_t viewport_width;
+        uint32_t viewport_height;
+        const Camera &camera;
     };
 
   private:
@@ -39,10 +50,7 @@ class SkyboxPass
 
     [[nodiscard]] bool init();
 
-    void
-    run(ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE color_target_rtv,
-        D3D12_CPU_DESCRIPTOR_HANDLE depth_target_rtv, D3D12_GPU_DESCRIPTOR_HANDLE environment_srv,
-        uint32_t width, uint32_t height, const Camera &camera);
+    void run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data);
 };
 
 } // namespace Arctic::Renderer

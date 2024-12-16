@@ -279,9 +279,7 @@ bool App::load_scene(const std::filesystem::path &path, Renderer::Scene &out_sce
             return false;
         }
 
-        Renderer::Material material;
         if (!m_renderer.create_material(
-                material,
                 diffuse_image_data,
                 diffuse_width,
                 diffuse_height,
@@ -296,8 +294,6 @@ bool App::load_scene(const std::filesystem::path &path, Renderer::Scene &out_sce
             spdlog::error("App::load_scene: failed to create material #{}", mat_idx);
             return false;
         }
-
-        out_scene.materials.emplace_back(material);
     }
 
     for (size_t mesh_idx = 0; mesh_idx < scene->mNumMeshes; ++mesh_idx)
@@ -352,14 +348,11 @@ bool App::load_scene(const std::filesystem::path &path, Renderer::Scene &out_sce
             }
         }
 
-        Renderer::Mesh mesh;
-        if (!m_renderer.create_mesh(mesh, vertices, indices, ai_mesh->mMaterialIndex))
+        if (!m_renderer.create_mesh(vertices, indices, ai_mesh->mMaterialIndex))
         {
             spdlog::error("App::load_scene: failed to create mesh #{}", mesh_idx);
             return false;
         }
-
-        out_scene.meshes.emplace_back(mesh);
     }
 
     std::vector nodes_to_process{

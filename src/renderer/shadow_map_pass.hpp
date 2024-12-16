@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <d3d12.h>
 
 #include "comptr.hpp"
@@ -20,11 +22,15 @@ class ShadowMapPass
   public:
     static constexpr uint32_t SIZE = 4000;
 
+    struct RunData
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE shadow_map_dsv;
+        std::span<Mesh> meshes;
+        const Scene &scene;
+    };
+
   private:
     RHI *m_rhi;
-
-    ComPtr<ID3D12DescriptorHeap> m_dsv_heap;
-    ComPtr<ID3D12Resource> m_depth_texture;
 
     ComPtr<ID3D12RootSignature> m_root_signature;
     ComPtr<ID3D12PipelineState> m_pipeline;
@@ -42,9 +48,7 @@ class ShadowMapPass
 
     [[nodiscard]] bool init();
 
-    void
-    run(ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE shadow_map,
-        const Scene &scene);
+    void run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data);
 };
 
 } // namespace Arctic::Renderer

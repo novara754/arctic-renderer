@@ -90,6 +90,7 @@ bool Renderer::init()
         spdlog::error("Renderer::init: failed to initialize point lights buffer");
         return false;
     }
+    m_lights_buffer_cbv_idx = create_cbv(m_lights_buffer.Get());
 
     if (!m_rhi.create_texture(
             ShadowMapPass::SIZE,
@@ -105,6 +106,7 @@ bool Renderer::init()
     }
     m_sun_shadow_map->SetName(L"sun shadow map texture");
     m_sun_shadow_map_dsv = create_dsv(m_sun_shadow_map.Get());
+    m_sun_shadow_map_srv_idx = create_srv(m_sun_shadow_map.Get(), DXGI_FORMAT_R32_FLOAT);
 
     int hdri_width, hdri_height;
     float *hdri_data =
@@ -120,7 +122,7 @@ bool Renderer::init()
         return false;
     }
     m_skybox_environment->SetName(L"environment hdri texture");
-    m_skybox_environment_srv =
+    m_skybox_environment_srv_idx =
         create_srv(m_skybox_environment.Get(), DXGI_FORMAT_R32G32B32A32_FLOAT);
 
     if (!m_rhi.create_texture(
@@ -138,6 +140,8 @@ bool Renderer::init()
     m_forward_color_target->SetName(L"forward color target texture");
     m_forward_color_target_rtv =
         create_rtv(m_forward_color_target.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT);
+    m_forward_color_target_uav_idx =
+        create_uav(m_forward_color_target.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT);
 
     if (!m_rhi.create_texture(
             m_window_size.width,
@@ -167,6 +171,8 @@ bool Renderer::init()
         return false;
     }
     m_post_process_output->SetName(L"post process output texture");
+    m_post_process_output_uav_idx =
+        create_uav(m_post_process_output.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
 
     if (!m_shadow_map_pass.init())
     {
@@ -191,16 +197,6 @@ bool Renderer::init()
         spdlog::error("Renderer::init: failed to initialize post process pass");
         return false;
     }
-
-    m_post_process_descriptors_base_handle =
-        create_uav(m_forward_color_target.Get(), DXGI_FORMAT_R16G16B16A16_FLOAT);
-    create_uav(m_post_process_output.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
-
-    m_forward_descriptors_base_handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(
-        m_cbv_srv_uav_heap->GetGPUDescriptorHandleForHeapStart(),
-        m_cbv_srv_uav_count,
-        m_cbv_srv_uav_descriptor_size
-    );
 
     {
         if (!m_rhi.create_descriptor_heap(
@@ -291,7 +287,15 @@ bool Renderer::render_frame(
                                       D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle) {
         cmd_list->SetDescriptorHeaps(1, m_cbv_srv_uav_heap.GetAddressOf());
 
-        m_shadow_map_pass.run(cmd_list, m_sun_shadow_map_dsv, scene);
+        // m_shadow_map_pass.run(cmd_list, m_sun_shadow_map_dsv, scene);
+        m_shadow_map_pass.run(
+            cmd_list,
+            ShadowMapPass::RunData{
+                .shadow_map_dsv = m_sun_shadow_map_dsv,
+                .meshes = m_meshes,
+                .scene = scene,
+            }
+        );
 
         CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_sun_shadow_map.Get(),
@@ -301,22 +305,29 @@ bool Renderer::render_frame(
         cmd_list->ResourceBarrier(1, &barrier);
         m_forward_pass.run(
             cmd_list,
-            m_forward_color_target_rtv,
-            m_forward_depth_target_dsv,
-            m_forward_descriptors_base_handle,
-            m_cbv_srv_uav_descriptor_size,
-            m_window_size.width,
-            m_window_size.height,
-            scene
+            ForwardPass::RunData{
+                .color_target_rtv = m_forward_color_target_rtv,
+                .depth_target_dsv = m_forward_depth_target_dsv,
+                .viewport_width = m_window_size.width,
+                .viewport_height = m_window_size.height,
+                .shadow_map_srv_idx = m_sun_shadow_map_srv_idx,
+                .environment_srv_idx = m_skybox_environment_srv_idx,
+                .lights_buffer_cbv_idx = m_lights_buffer_cbv_idx,
+                .meshes = m_meshes,
+                .materials = m_materials,
+                .scene = scene,
+            }
         );
         m_skybox_pass.run(
             cmd_list,
-            m_forward_color_target_rtv,
-            m_forward_depth_target_dsv,
-            m_skybox_environment_srv,
-            m_window_size.width,
-            m_window_size.height,
-            scene.camera
+            SkyboxPass::RunData{
+                .color_target_rtv = m_forward_color_target_rtv,
+                .depth_target_rtv = m_forward_depth_target_dsv,
+                .environment_srv_idx = m_skybox_environment_srv_idx,
+                .viewport_width = m_window_size.width,
+                .viewport_height = m_window_size.height,
+                .camera = scene.camera,
+            }
         );
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_sun_shadow_map.Get(),
@@ -334,12 +345,15 @@ bool Renderer::render_frame(
 
         m_post_process_pass.run(
             cmd_list,
-            m_post_process_descriptors_base_handle,
-            m_window_size.width,
-            m_window_size.height,
-            static_cast<uint32_t>(settings.tm_method),
-            settings.gamma,
-            settings.exposure
+            PostProcessPass::RunData{
+                .input_uav_idx = m_forward_color_target_uav_idx,
+                .output_uav_idx = m_post_process_output_uav_idx,
+                .viewport_width = m_window_size.width,
+                .viewport_height = m_window_size.height,
+                .tm_method = static_cast<uint32_t>(settings.tm_method),
+                .gamma = settings.gamma,
+                .exposure = settings.exposure,
+            }
         );
 
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -401,19 +415,21 @@ bool Renderer::render_frame(
 }
 
 bool Renderer::create_mesh(
-    Mesh &out_mesh, std::span<Vertex> vertices, std::span<uint32_t> indices, size_t material_idx
+    std::span<Vertex> vertices, std::span<uint32_t> indices, MaterialIdx material_idx
 )
 {
+    Mesh mesh;
+
     uint64_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
     bool res = m_rhi.create_buffer(
         vertex_buffer_size,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
         D3D12_HEAP_TYPE_DEFAULT,
-        out_mesh.vertex_buffer
+        mesh.vertex_buffer
     );
 
     res &= m_rhi.upload_to_buffer(
-        out_mesh.vertex_buffer.Get(),
+        mesh.vertex_buffer.Get(),
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
         vertices.data(),
         vertex_buffer_size
@@ -424,11 +440,11 @@ bool Renderer::create_mesh(
         index_buffer_size,
         D3D12_RESOURCE_STATE_INDEX_BUFFER,
         D3D12_HEAP_TYPE_DEFAULT,
-        out_mesh.index_buffer
+        mesh.index_buffer
     );
 
     res &= m_rhi.upload_to_buffer(
-        out_mesh.index_buffer.Get(),
+        mesh.index_buffer.Get(),
         D3D12_RESOURCE_STATE_INDEX_BUFFER,
         indices.data(),
         index_buffer_size
@@ -439,37 +455,40 @@ bool Renderer::create_mesh(
         spdlog::error("Renderer::create_mesh: failed to create vertex and/or index buffers");
     }
 
-    out_mesh.vertex_buffer_view.BufferLocation = out_mesh.vertex_buffer->GetGPUVirtualAddress();
-    out_mesh.vertex_buffer_view.StrideInBytes = sizeof(Vertex);
-    out_mesh.vertex_buffer_view.SizeInBytes = static_cast<UINT>(vertex_buffer_size);
+    mesh.vertex_buffer_view.BufferLocation = mesh.vertex_buffer->GetGPUVirtualAddress();
+    mesh.vertex_buffer_view.StrideInBytes = sizeof(Vertex);
+    mesh.vertex_buffer_view.SizeInBytes = static_cast<UINT>(vertex_buffer_size);
 
-    out_mesh.index_buffer_view.BufferLocation = out_mesh.index_buffer->GetGPUVirtualAddress();
-    out_mesh.index_buffer_view.Format = DXGI_FORMAT_R32_UINT;
-    out_mesh.index_buffer_view.SizeInBytes = static_cast<UINT>(index_buffer_size);
+    mesh.index_buffer_view.BufferLocation = mesh.index_buffer->GetGPUVirtualAddress();
+    mesh.index_buffer_view.Format = DXGI_FORMAT_R32_UINT;
+    mesh.index_buffer_view.SizeInBytes = static_cast<UINT>(index_buffer_size);
 
-    out_mesh.index_count = static_cast<uint32_t>(indices.size());
+    mesh.index_count = static_cast<uint32_t>(indices.size());
 
-    out_mesh.material_idx = material_idx;
+    mesh.material_idx = material_idx;
+
+    m_meshes.emplace_back(mesh);
 
     return true;
 }
 
 bool Renderer::create_material(
-    Material &out_material, void *diffuse_data, uint32_t diffuse_width, uint32_t diffuse_height,
-    void *normal_data, uint32_t normal_width, uint32_t normal_height,
-    void *metalness_roughness_data, uint32_t metalness_roughness_width,
-    uint32_t metalness_roughness_height
+    void *diffuse_data, uint32_t diffuse_width, uint32_t diffuse_height, void *normal_data,
+    uint32_t normal_width, uint32_t normal_height, void *metalness_roughness_data,
+    uint32_t metalness_roughness_width, uint32_t metalness_roughness_height
 )
 {
+    Material material;
+
     bool res = m_rhi.create_texture(
         diffuse_width,
         diffuse_height,
         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        out_material.diffuse
+        material.diffuse
     );
     res &= m_rhi.upload_to_texture(
-        out_material.diffuse.Get(),
+        material.diffuse.Get(),
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
         diffuse_data,
         diffuse_width,
@@ -487,10 +506,10 @@ bool Renderer::create_material(
         normal_height,
         DXGI_FORMAT_R8G8B8A8_UNORM,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        out_material.normal
+        material.normal
     );
     res &= m_rhi.upload_to_texture(
-        out_material.normal.Get(),
+        material.normal.Get(),
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
         normal_data,
         normal_width,
@@ -508,10 +527,10 @@ bool Renderer::create_material(
         metalness_roughness_height,
         DXGI_FORMAT_R8G8B8A8_UNORM,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        out_material.metalness_roughness
+        material.metalness_roughness
     );
     res &= m_rhi.upload_to_texture(
-        out_material.metalness_roughness.Get(),
+        material.metalness_roughness.Get(),
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
         metalness_roughness_data,
         metalness_roughness_width,
@@ -524,12 +543,11 @@ bool Renderer::create_material(
         return false;
     }
 
-    create_srv(m_sun_shadow_map.Get(), DXGI_FORMAT_R32_FLOAT);
-    create_srv(m_skybox_environment.Get(), DXGI_FORMAT_R32G32B32A32_FLOAT);
-    create_srv(out_material.diffuse.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-    create_srv(out_material.normal.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
-    create_srv(out_material.metalness_roughness.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
-    create_cbv(m_lights_buffer.Get());
+    material.srv_offset = create_srv(material.diffuse.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    create_srv(material.normal.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    create_srv(material.metalness_roughness.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
+
+    m_materials.emplace_back(material);
 
     return true;
 }
@@ -623,7 +641,7 @@ Renderer::create_dsv(ID3D12Resource *resource)
     return handle;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_srv(ID3D12Resource *resource, DXGI_FORMAT format)
+uint32_t Renderer::create_srv(ID3D12Resource *resource, DXGI_FORMAT format)
 {
     CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
         m_cbv_srv_uav_heap->GetCPUDescriptorHandleForHeapStart(),
@@ -640,16 +658,10 @@ D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_srv(ID3D12Resource *resource, DXGI_
     desc.Texture2D.ResourceMinLODClamp = 0.0f;
     m_rhi.device()->CreateShaderResourceView(resource, &desc, handle);
 
-    ++m_cbv_srv_uav_count;
-
-    return CD3DX12_GPU_DESCRIPTOR_HANDLE(
-        m_cbv_srv_uav_heap->GetGPUDescriptorHandleForHeapStart(),
-        m_cbv_srv_uav_count - 1,
-        m_cbv_srv_uav_descriptor_size
-    );
+    return m_cbv_srv_uav_count++;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_uav(ID3D12Resource *resource, DXGI_FORMAT format)
+uint32_t Renderer::create_uav(ID3D12Resource *resource, DXGI_FORMAT format)
 {
     CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
         m_cbv_srv_uav_heap->GetCPUDescriptorHandleForHeapStart(),
@@ -663,16 +675,10 @@ D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_uav(ID3D12Resource *resource, DXGI_
     desc.Texture2D.PlaneSlice = 0;
     m_rhi.device()->CreateUnorderedAccessView(resource, nullptr, &desc, handle);
 
-    ++m_cbv_srv_uav_count;
-
-    return CD3DX12_GPU_DESCRIPTOR_HANDLE(
-        m_cbv_srv_uav_heap->GetGPUDescriptorHandleForHeapStart(),
-        m_cbv_srv_uav_count - 1,
-        m_cbv_srv_uav_descriptor_size
-    );
+    return m_cbv_srv_uav_count++;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_cbv(ID3D12Resource *resource)
+uint32_t Renderer::create_cbv(ID3D12Resource *resource)
 {
     CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
         m_cbv_srv_uav_heap->GetCPUDescriptorHandleForHeapStart(),
@@ -685,13 +691,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE Renderer::create_cbv(ID3D12Resource *resource)
         next_multiple_of_k(sizeof(LightsBuffer), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     m_rhi.device()->CreateConstantBufferView(&desc, handle);
 
-    ++m_cbv_srv_uav_count;
-
-    return CD3DX12_GPU_DESCRIPTOR_HANDLE(
-        m_cbv_srv_uav_heap->GetGPUDescriptorHandleForHeapStart(),
-        m_cbv_srv_uav_count - 1,
-        m_cbv_srv_uav_descriptor_size
-    );
+    return m_cbv_srv_uav_count++;
 }
 
 } // namespace Arctic::Renderer

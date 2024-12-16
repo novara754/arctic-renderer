@@ -9,11 +9,12 @@ cbuffer Scene : register(b0)
 	float3 sun_dir;
 	float ambient;
 	float3 sun_color;
+	uint shadow_map_idx;
+	uint environment_idx;
+	uint material_offset;
+	uint lights_buffer_idx;
 }
 
-Texture2D t_shadow_map : register(t0);
-Texture2D t_environment : register(t1);
-Texture2D t_textures[3] : register(t2);
 SamplerState s_sampler : register(s0);
 
 struct PointLight
@@ -22,11 +23,11 @@ struct PointLight
 	float3 color;
 };
 
-cbuffer Lights : register(b1)
+struct Lights
 {
-	uint point_lights_len;
-	PointLight point_lights[16];
-}
+	uint len;
+	PointLight lights[16];
+};
 
 struct VSIn
 {
@@ -66,6 +67,8 @@ VSOut vs_main(VSIn vs_in)
 
 float calculate_shadow(float3 normal, float4 light_space_position)
 {
+	Texture2D<float4> t_shadow_map = ResourceDescriptorHeap[shadow_map_idx];
+
 	float3 proj_coords = light_space_position.xyz / light_space_position.w;
 	proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 	proj_coords.y = 1.0 - proj_coords.y;
@@ -94,12 +97,14 @@ float calculate_shadow(float3 normal, float4 light_space_position)
 
 float3 get_base_color(float2 tex_coords)
 {
-	return t_textures[0].Sample(s_sampler, tex_coords).rgb;
+	Texture2D<float4> t_diffuse = ResourceDescriptorHeap[material_offset + 0];
+	return t_diffuse.Sample(s_sampler, tex_coords).rgb;
 }
 
 float3 get_normal(float2 tex_coords, float3x3 tbn)
 {
-	float3 normal = t_textures[1].Sample(s_sampler, tex_coords).rgb;
+	Texture2D<float4> t_normal = ResourceDescriptorHeap[material_offset + 1];
+	float3 normal = t_normal.Sample(s_sampler, tex_coords).rgb;
 	normal.g = 1.0 - normal.g;
 	normal = normal * 2.0 - 1.0;
 	normal = normalize(mul(tbn, normal));
@@ -108,12 +113,14 @@ float3 get_normal(float2 tex_coords, float3x3 tbn)
 
 float get_metalness(float2 tex_coords)
 {
-	return t_textures[2].Sample(s_sampler, tex_coords).b;
+	Texture2D<float4> t_metalness = ResourceDescriptorHeap[material_offset + 2];
+	return t_metalness.Sample(s_sampler, tex_coords).b;
 }
 
 float get_roughness(float2 tex_coords)
 {
-	return t_textures[2].Sample(s_sampler, tex_coords).g;
+	Texture2D<float4> t_roughness = ResourceDescriptorHeap[material_offset + 2];
+	return t_roughness.Sample(s_sampler, tex_coords).g;
 }
 
 float3 fresnel_schlick(float3 cos_theta, float3 F0)
@@ -189,6 +196,8 @@ static const float2 inv_atan = float2(0.1591, 0.3183);
 
 float3 sample_environment(float3 dir)
 {
+	Texture2D<float4> t_environment = ResourceDescriptorHeap[environment_idx];
+
 	float2 uv = float2(atan2(dir.z, dir.x), asin(dir.y));
 	uv *= inv_atan;
 	uv += 0.5;
@@ -198,6 +207,8 @@ float3 sample_environment(float3 dir)
 
 float4 ps_main(VSOut vs_out) : SV_TARGET
 {
+	ConstantBuffer<Lights> point_lights = ResourceDescriptorHeap[lights_buffer_idx];
+
 	float3 base_color = get_base_color(vs_out.tex_coords);
 	float3 n = get_normal(vs_out.tex_coords, vs_out.tbn);
 	float metalness = get_metalness(vs_out.tex_coords);
@@ -210,12 +221,12 @@ float4 ps_main(VSOut vs_out) : SV_TARGET
 	float shadow = calculate_shadow(n, vs_out.light_space_position);
 	Lo += (1.0 - shadow) * calculate_outgoing_radiance(n, wo, -sun_dir, sun_color, base_color, metalness, roughness);
 
-	for (uint i = 0; i < point_lights_len; ++i)
+	for (uint i = 0; i < point_lights.len; ++i)
 	{
-		float3 light_dir = point_lights[i].position - vs_out.world_position;
+		float3 light_dir = point_lights.lights[i].position - vs_out.world_position;
 		float dist = length(light_dir);
 		float3 wi = light_dir / dist;
-		float3 radiance = point_lights[i].color / (dist * dist);
+		float3 radiance = point_lights.lights[i].color / (dist * dist);
 		Lo += (1.0 - shadow) * calculate_outgoing_radiance(n, wo, wi, radiance, base_color, metalness, roughness);
 	}
 

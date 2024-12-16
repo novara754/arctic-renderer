@@ -58,9 +58,7 @@ class App
                 .position = {0.0f, 1.0f, 0.0f},
                 .color = {10.0f, 0.0f, 0.0f},
             },
-        },
-        .meshes{},
-        .objects{},
+        }
     };
     Renderer::Settings m_settings;
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <d3d12.h>
 
 #include "comptr.hpp"
@@ -12,11 +14,28 @@ class PostProcessPass
 {
     struct ConstantBuffer
     {
+        uint32_t input_idx;
+        uint32_t output_idx;
+
         float gamma;
         uint32_t tm_method;
         float exposure;
     };
 
+  public:
+    struct RunData
+    {
+        uint32_t input_uav_idx;
+        uint32_t output_uav_idx;
+        uint32_t viewport_width;
+        uint32_t viewport_height;
+
+        uint32_t tm_method;
+        float gamma;
+        float exposure;
+    };
+
+  private:
     static constexpr uint32_t GROUP_WIDTH = 16;
     static constexpr uint32_t GROUP_HEIGHT = 16;
 
@@ -38,9 +57,7 @@ class PostProcessPass
 
     [[nodiscard]] bool init();
 
-    void
-    run(ID3D12GraphicsCommandList *cmd_list, D3D12_GPU_DESCRIPTOR_HANDLE descriptor_handle,
-        uint32_t width, uint32_t height, uint32_t tm_method, float gamma, float exposure);
+    void run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data);
 };
 
 } // namespace Arctic::Renderer

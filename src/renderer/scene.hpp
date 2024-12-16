@@ -14,6 +14,9 @@
 namespace Arctic::Renderer
 {
 
+typedef size_t MeshIdx;
+typedef size_t MaterialIdx;
+
 struct Camera
 {
     glm::vec3 eye;
@@ -53,7 +56,7 @@ struct Mesh
 
     uint32_t index_count;
 
-    size_t material_idx;
+    MaterialIdx material_idx;
 };
 
 struct Material
@@ -61,12 +64,14 @@ struct Material
     ComPtr<ID3D12Resource> diffuse;
     ComPtr<ID3D12Resource> normal;
     ComPtr<ID3D12Resource> metalness_roughness;
+
+    uint32_t srv_offset;
 };
 
 struct Object
 {
     glm::mat4 trs;
-    size_t mesh_idx;
+    MeshIdx mesh_idx;
 };
 
 struct DirectionalLight
@@ -94,8 +99,6 @@ struct Scene
     float ambient;
     DirectionalLight sun;
     std::vector<PointLight> point_lights;
-    std::vector<Mesh> meshes;
-    std::vector<Material> materials;
     std::vector<Object> objects;
 };
 

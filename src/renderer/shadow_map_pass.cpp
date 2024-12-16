@@ -110,25 +110,30 @@ bool ShadowMapPass::init()
     return true;
 }
 
-void ShadowMapPass::run(
-    ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE shadow_map, const Scene &scene
-)
+void ShadowMapPass::run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data)
 {
     ZoneScoped;
     TracyD3D12Zone(m_rhi->tracy_ctx(), cmd_list, "Shadow Map Pass");
 
     ConstantBuffer constants{
-        .proj_view = scene.sun.proj_view_matrix(),
+        .proj_view = run_data.scene.sun.proj_view_matrix(),
     };
 
-    cmd_list->ClearDepthStencilView(shadow_map, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    cmd_list->ClearDepthStencilView(
+        run_data.shadow_map_dsv,
+        D3D12_CLEAR_FLAG_DEPTH,
+        1.0f,
+        0,
+        0,
+        nullptr
+    );
 
     cmd_list->SetGraphicsRootSignature(m_root_signature.Get());
     cmd_list->SetPipelineState(m_pipeline.Get());
 
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    cmd_list->OMSetRenderTargets(0, nullptr, FALSE, &shadow_map);
+    cmd_list->OMSetRenderTargets(0, nullptr, FALSE, &run_data.shadow_map_dsv);
 
     D3D12_VIEWPORT viewport{
         .TopLeftX = 0.0f,
@@ -149,9 +154,9 @@ void ShadowMapPass::run(
 
     {
         ZoneScopedN("Draw Loop");
-        for (const Object &obj : scene.objects)
+        for (const Object &obj : run_data.scene.objects)
         {
-            const Mesh &mesh = scene.meshes[obj.mesh_idx];
+            const Mesh &mesh = run_data.meshes[obj.mesh_idx];
             constants.model = obj.trs;
 
             cmd_list

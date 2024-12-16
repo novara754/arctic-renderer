@@ -32,25 +32,8 @@ bool ForwardPass::init()
     ComPtr<ID3DBlob> root_signature;
     ComPtr<ID3DBlob> error;
 
-    std::array<CD3DX12_DESCRIPTOR_RANGE, 4> descriptor_ranges{};
-    // 1 shadow map
-    descriptor_ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0);
-    // 1 environment
-    descriptor_ranges[1]
-        .Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
-    // 3 material textures
-    descriptor_ranges[2]
-        .Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 2, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
-    // 1 lights buffer
-    descriptor_ranges[3]
-        .Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
-
-    std::array<CD3DX12_ROOT_PARAMETER, 2> root_parameters{};
+    std::array<CD3DX12_ROOT_PARAMETER, 1> root_parameters{};
     root_parameters[0].InitAsConstants(CONSTANTS_SIZE(ConstantBuffer), 0);
-    root_parameters[1].InitAsDescriptorTable(
-        static_cast<uint32_t>(descriptor_ranges.size()),
-        descriptor_ranges.data()
-    );
 
     D3D12_STATIC_SAMPLER_DESC sampler{};
     sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -73,7 +56,8 @@ bool ForwardPass::init()
         root_parameters.data(),
         1,
         &sampler,
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
     );
     if (FAILED(D3D12SerializeRootSignature(
             &root_signature_desc,
@@ -174,36 +158,43 @@ bool ForwardPass::init()
     return true;
 }
 
-void ForwardPass::run(
-    ID3D12GraphicsCommandList *cmd_list, D3D12_CPU_DESCRIPTOR_HANDLE color_target_rtv,
-    D3D12_CPU_DESCRIPTOR_HANDLE depth_target_dsv, D3D12_GPU_DESCRIPTOR_HANDLE srv_base_handle,
-    uint32_t srv_descriptor_size, uint32_t width, uint32_t height, const Scene &scene
-)
+void ForwardPass::run(ID3D12GraphicsCommandList *cmd_list, const RunData &run_data)
 {
     ZoneScoped;
     TracyD3D12Zone(m_rhi->tracy_ctx(), cmd_list, "Forward Pass");
 
     ConstantBuffer constants{
-        .eye = scene.camera.eye,
-        .proj_view = scene.camera.proj_view_matrix(),
-        .light_proj_view = scene.sun.proj_view_matrix(),
-        .sun_dir = scene.sun.direction(),
-        .ambient = scene.ambient,
-        .sun_color = scene.sun.color,
+        .eye = run_data.scene.camera.eye,
+        .proj_view = run_data.scene.camera.proj_view_matrix(),
+        .light_proj_view = run_data.scene.sun.proj_view_matrix(),
+        .sun_dir = run_data.scene.sun.direction(),
+        .ambient = run_data.scene.ambient,
+        .sun_color = run_data.scene.sun.color,
+
+        .shadow_map_idx = run_data.shadow_map_srv_idx,
+        .environment_idx = run_data.environment_srv_idx,
+        .lights_buffer_idx = run_data.lights_buffer_cbv_idx,
     };
 
-    cmd_list->ClearDepthStencilView(depth_target_dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    cmd_list->ClearDepthStencilView(
+        run_data.depth_target_dsv,
+        D3D12_CLEAR_FLAG_DEPTH,
+        1.0f,
+        0,
+        0,
+        nullptr
+    );
 
     cmd_list->SetGraphicsRootSignature(m_root_signature.Get());
     cmd_list->SetPipelineState(m_pipeline.Get());
     cmd_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmd_list->OMSetRenderTargets(1, &color_target_rtv, FALSE, &depth_target_dsv);
+    cmd_list->OMSetRenderTargets(1, &run_data.color_target_rtv, FALSE, &run_data.depth_target_dsv);
 
     D3D12_VIEWPORT viewport{
         .TopLeftX = 0.0f,
         .TopLeftY = 0.0f,
-        .Width = static_cast<float>(width),
-        .Height = static_cast<float>(height),
+        .Width = static_cast<float>(run_data.viewport_width),
+        .Height = static_cast<float>(run_data.viewport_height),
         .MinDepth = 0.0f,
         .MaxDepth = 1.0f,
     };
@@ -211,26 +202,22 @@ void ForwardPass::run(
     D3D12_RECT scissor{
         .left = 0,
         .top = 0,
-        .right = static_cast<long>(width),
-        .bottom = static_cast<long>(height),
+        .right = static_cast<long>(run_data.viewport_width),
+        .bottom = static_cast<long>(run_data.viewport_height),
     };
     cmd_list->RSSetScissorRects(1, &scissor);
 
     {
         ZoneScopedN("Draw Loop");
-        for (const Object &obj : scene.objects)
+        for (const Object &obj : run_data.scene.objects)
         {
-            const Mesh &mesh = scene.meshes[obj.mesh_idx];
+            const Mesh &mesh = run_data.meshes[obj.mesh_idx];
+            const Material &material = run_data.materials[mesh.material_idx];
             constants.model = obj.trs;
+            constants.material_offset = material.srv_offset;
 
-            CD3DX12_GPU_DESCRIPTOR_HANDLE srv_handle(
-                srv_base_handle,
-                static_cast<INT>(mesh.material_idx * 6),
-                srv_descriptor_size
-            );
             cmd_list
                 ->SetGraphicsRoot32BitConstants(0, CONSTANTS_SIZE(ConstantBuffer), &constants, 0);
-            cmd_list->SetGraphicsRootDescriptorTable(1, srv_handle);
             cmd_list->IASetVertexBuffers(0, 1, &mesh.vertex_buffer_view);
             cmd_list->IASetIndexBuffer(&mesh.index_buffer_view);
             cmd_list->DrawIndexedInstanced(mesh.index_count, 1, 0, 0, 0);

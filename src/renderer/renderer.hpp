@@ -54,30 +54,35 @@ class Renderer
 
     LightsBuffer m_lights_buffer_data;
     ComPtr<ID3D12Resource> m_lights_buffer;
+    uint32_t m_lights_buffer_cbv_idx;
 
     ComPtr<ID3D12Resource> m_sun_shadow_map;
     D3D12_CPU_DESCRIPTOR_HANDLE m_sun_shadow_map_dsv;
+    uint32_t m_sun_shadow_map_srv_idx;
 
     ComPtr<ID3D12Resource> m_skybox_environment;
-    D3D12_GPU_DESCRIPTOR_HANDLE m_skybox_environment_srv;
+    uint32_t m_skybox_environment_srv_idx;
 
     ComPtr<ID3D12Resource> m_forward_color_target;
     D3D12_CPU_DESCRIPTOR_HANDLE m_forward_color_target_rtv;
+    uint32_t m_forward_color_target_uav_idx;
 
     ComPtr<ID3D12Resource> m_forward_depth_target;
     D3D12_CPU_DESCRIPTOR_HANDLE m_forward_depth_target_dsv;
 
     ComPtr<ID3D12Resource> m_post_process_output;
+    uint32_t m_post_process_output_uav_idx;
 
     ShadowMapPass m_shadow_map_pass;
 
     SkyboxPass m_skybox_pass;
 
     ForwardPass m_forward_pass;
-    D3D12_GPU_DESCRIPTOR_HANDLE m_forward_descriptors_base_handle;
 
     PostProcessPass m_post_process_pass;
-    D3D12_GPU_DESCRIPTOR_HANDLE m_post_process_descriptors_base_handle;
+
+    std::vector<Mesh> m_meshes;
+    std::vector<Material> m_materials;
 
     Renderer() = delete;
     Renderer(const Renderer &) = delete;
@@ -101,15 +106,13 @@ class Renderer
     [[nodiscard]] bool
     render_frame(const Scene &scene, const Settings &settings, std::function<void()> &&build_ui);
 
-    [[nodiscard]] bool create_mesh(
-        Mesh &out_mesh, std::span<Vertex> vertices, std::span<uint32_t> indices, size_t material_idx
-    );
+    [[nodiscard]] bool
+    create_mesh(std::span<Vertex> vertices, std::span<uint32_t> indices, MaterialIdx material_idx);
 
     [[nodiscard]] bool create_material(
-        Material &out_material, void *diffuse_data, uint32_t diffuse_width, uint32_t diffuse_height,
-        void *normal_data, uint32_t normal_width, uint32_t normal_height,
-        void *metalness_roughness_data, uint32_t metalness_roughness_width,
-        uint32_t metalness_roughness_height
+        void *diffuse_data, uint32_t diffuse_width, uint32_t diffuse_height, void *normal_data,
+        uint32_t normal_width, uint32_t normal_height, void *metalness_roughness_data,
+        uint32_t metalness_roughness_width, uint32_t metalness_roughness_height
     );
 
     [[nodiscard]] bool create_hdri(float *data, uint32_t width, uint32_t height);
@@ -127,11 +130,11 @@ class Renderer
 
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE create_dsv(ID3D12Resource *resource);
 
-    D3D12_GPU_DESCRIPTOR_HANDLE create_srv(ID3D12Resource *resource, DXGI_FORMAT format);
+    uint32_t create_srv(ID3D12Resource *resource, DXGI_FORMAT format);
 
-    D3D12_GPU_DESCRIPTOR_HANDLE create_uav(ID3D12Resource *resource, DXGI_FORMAT format);
+    uint32_t create_uav(ID3D12Resource *resource, DXGI_FORMAT format);
 
-    D3D12_GPU_DESCRIPTOR_HANDLE create_cbv(ID3D12Resource *resource);
+    uint32_t create_cbv(ID3D12Resource *resource);
 };
 
 } // namespace Arctic::Renderer
