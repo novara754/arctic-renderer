@@ -12,6 +12,8 @@
 
 #include "implot.h"
 
+#include "stb_image.h"
+
 #include "../util.hpp"
 
 namespace Arctic::Renderer
@@ -104,6 +106,23 @@ bool Renderer::init()
     m_sun_shadow_map->SetName(L"sun shadow map texture");
     m_sun_shadow_map_dsv = create_dsv(m_sun_shadow_map.Get());
 
+    int hdri_width, hdri_height;
+    float *hdri_data =
+        stbi_loadf("./assets/dreifaltigkeitsberg_2k.hdr", &hdri_width, &hdri_height, nullptr, 4);
+    if (!hdri_data)
+    {
+        spdlog::error("Renderer::init: failed to load hdri");
+        return false;
+    }
+    if (!create_hdri(hdri_data, hdri_width, hdri_height))
+    {
+        spdlog::error("Renderer::init: failed to create environment texture");
+        return false;
+    }
+    m_skybox_environment->SetName(L"environment hdri texture");
+    m_skybox_environment_srv =
+        create_srv(m_skybox_environment.Get(), DXGI_FORMAT_R32G32B32A32_FLOAT);
+
     if (!m_rhi.create_texture(
             m_window_size.width,
             m_window_size.height,
@@ -152,6 +171,12 @@ bool Renderer::init()
     if (!m_shadow_map_pass.init())
     {
         spdlog::error("Renderer::init: failed to initialize forward pass");
+        return false;
+    }
+
+    if (!m_skybox_pass.init())
+    {
+        spdlog::error("Renderer::init: failed to initialize skybox pass");
         return false;
     }
 
@@ -283,6 +308,15 @@ bool Renderer::render_frame(
             m_window_size.width,
             m_window_size.height,
             scene
+        );
+        m_skybox_pass.run(
+            cmd_list,
+            m_forward_color_target_rtv,
+            m_forward_depth_target_dsv,
+            m_skybox_environment_srv,
+            m_window_size.width,
+            m_window_size.height,
+            scene.camera
         );
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_sun_shadow_map.Get(),
@@ -491,10 +525,41 @@ bool Renderer::create_material(
     }
 
     create_srv(m_sun_shadow_map.Get(), DXGI_FORMAT_R32_FLOAT);
+    create_srv(m_skybox_environment.Get(), DXGI_FORMAT_R32G32B32A32_FLOAT);
     create_srv(out_material.diffuse.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
     create_srv(out_material.normal.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
     create_srv(out_material.metalness_roughness.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
     create_cbv(m_lights_buffer.Get());
+
+    return true;
+}
+
+bool Renderer::create_hdri(float *data, uint32_t width, uint32_t height)
+{
+    if (!m_rhi.create_texture(
+            width,
+            height,
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            m_skybox_environment
+        ))
+    {
+        spdlog::error("Renderer::create_hdri: failed to create texture");
+        return false;
+    }
+
+    if (!m_rhi.upload_to_texture(
+            m_skybox_environment.Get(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            data,
+            width,
+            height,
+            4 * sizeof(float)
+        ))
+    {
+        spdlog::error("Renderer::create_hdri: failed to upload data");
+        return false;
+    }
 
     return true;
 }

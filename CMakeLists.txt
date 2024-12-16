@@ -107,6 +107,7 @@ add_executable(arctic
         src/renderer/forward_pass.cpp
         src/renderer/post_process_pass.cpp
         src/renderer/shadow_map_pass.cpp
+        src/renderer/skybox_pass.cpp
 
         src/stb_image_impl.cpp
 

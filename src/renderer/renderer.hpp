@@ -11,6 +11,7 @@
 #include "post_process_pass.hpp"
 #include "scene.hpp"
 #include "shadow_map_pass.hpp"
+#include "skybox_pass.hpp"
 
 namespace Arctic::Renderer
 {
@@ -57,6 +58,9 @@ class Renderer
     ComPtr<ID3D12Resource> m_sun_shadow_map;
     D3D12_CPU_DESCRIPTOR_HANDLE m_sun_shadow_map_dsv;
 
+    ComPtr<ID3D12Resource> m_skybox_environment;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_skybox_environment_srv;
+
     ComPtr<ID3D12Resource> m_forward_color_target;
     D3D12_CPU_DESCRIPTOR_HANDLE m_forward_color_target_rtv;
 
@@ -66,6 +70,8 @@ class Renderer
     ComPtr<ID3D12Resource> m_post_process_output;
 
     ShadowMapPass m_shadow_map_pass;
+
+    SkyboxPass m_skybox_pass;
 
     ForwardPass m_forward_pass;
     D3D12_GPU_DESCRIPTOR_HANDLE m_forward_descriptors_base_handle;
@@ -82,7 +88,7 @@ class Renderer
   public:
     Renderer(SDL_Window *window, uint32_t initial_width, uint32_t initial_height)
         : m_window(window), m_window_size{initial_width, initial_height}, m_shadow_map_pass(&m_rhi),
-          m_forward_pass(&m_rhi), m_post_process_pass(&m_rhi)
+          m_skybox_pass(&m_rhi), m_forward_pass(&m_rhi), m_post_process_pass(&m_rhi)
     {
     }
 
@@ -105,6 +111,8 @@ class Renderer
         void *metalness_roughness_data, uint32_t metalness_roughness_width,
         uint32_t metalness_roughness_height
     );
+
+    [[nodiscard]] bool create_hdri(float *data, uint32_t width, uint32_t height);
 
     void update_lights(std::span<PointLight> point_lights);
 

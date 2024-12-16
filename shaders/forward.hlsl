@@ -12,7 +12,8 @@ cbuffer Scene : register(b0)
 }
 
 Texture2D t_shadow_map : register(t0);
-Texture2D t_textures[3] : register(t1);
+Texture2D t_environment : register(t1);
+Texture2D t_textures[3] : register(t2);
 SamplerState s_sampler : register(s0);
 
 struct PointLight
@@ -182,6 +183,17 @@ float3 calculate_outgoing_radiance(float3 n, float3 wo, float3 wi, float3 ingoin
 
 	float n_dot_wi = max(dot(n, wi), 0.0);
 	return (kD * base_color / PI + specular) * ingoing_radiance * n_dot_wi;
+}
+
+static const float2 inv_atan = float2(0.1591, 0.3183);
+
+float3 sample_environment(float3 dir)
+{
+	float2 uv = float2(atan2(dir.z, dir.x), asin(dir.y));
+	uv *= inv_atan;
+	uv += 0.5;
+
+	return t_environment.Sample(s_sampler, uv).rgb;
 }
 
 float4 ps_main(VSOut vs_out) : SV_TARGET

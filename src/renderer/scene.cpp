@@ -23,6 +23,21 @@ glm::vec3 Camera::forward() const
     return dir_from_rot(this->rotation);
 }
 
+glm::mat4 Camera::proj_view_matrix_no_translation() const
+{
+    glm::vec3 forward = dir_from_rot(this->rotation);
+    glm::vec3 up = this->up();
+
+    glm::mat4 view = glm::mat4(glm::mat3(glm::lookAtRH(this->eye, this->eye + forward, up)));
+    glm::mat4 proj = glm::perspectiveRH(
+        glm::radians(this->fov_y),
+        this->aspect,
+        this->z_near_far[0],
+        this->z_near_far[1]
+    );
+    return proj * view;
+}
+
 glm::mat4 Camera::proj_view_matrix() const
 {
     glm::vec3 forward = dir_from_rot(this->rotation);

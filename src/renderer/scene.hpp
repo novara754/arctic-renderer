@@ -29,6 +29,8 @@ struct Camera
         return glm::vec3(0.0f, 1.0f, 0.0f);
     }
 
+    [[nodiscard]] glm::mat4 proj_view_matrix_no_translation() const;
+
     [[nodiscard]] glm::mat4 proj_view_matrix() const;
 };
 

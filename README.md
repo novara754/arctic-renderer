@@ -27,3 +27,7 @@ A custom render engine written from scratch using DirectX 12.
 ![Screenshot of the engine rendering the flight helmet sample glTF](./flight-helmet.png)
 
 The models used in the screenshots can be found at https://github.com/KhronosGroup/glTF-Sample-Assets .
+
+## Credits 
+
+- dreifaltigkeitsberg_2k.hdr: https://polyhaven.com/a/dreifaltigkeitsberg
